@@ -55,11 +55,11 @@ func main() {
 		},
 		{
 			Name:     "eve",
-			Provider: "spyon.you",
+			Provider: "gchq.uk",
 		},
 		{
 			Name:     "malory",
-			Provider: "fsb.russians",
+			Provider: "fsb.ru",
 		},
 	}
 
@@ -83,6 +83,24 @@ func main() {
 			panic(err)
 		}
 		userKeyMap[email] = privateKey.PublicKey()
+
+		// wire protocol keys
+
+		wirePrivateKey, err := ecdh.NewKeypair(rand.Reader)
+		if err != nil {
+			panic(err)
+		}
+		wirePrivateKeyFile := util.CreateKeyFileName(userKeysDir, "wire", users[i].Name, users[i].Provider, "private")
+		wireVault := vault.Vault{
+			Type:       "private",
+			Email:      email,
+			Passphrase: passphrase,
+			Path:       wirePrivateKeyFile,
+		}
+		err = wireVault.Seal(wirePrivateKey.Bytes())
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	jsonUserPki := []util.User{}
