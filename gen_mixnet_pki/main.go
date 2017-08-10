@@ -17,8 +17,9 @@
 package main
 
 import (
-	"encoding/base64"
+	"bytes"
 	"encoding/json"
+	"encoding/pem"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -152,10 +153,19 @@ func main() {
 		jsonDesc := desc.JsonProviderDescriptor()
 		jsonPKI.ProviderDescriptors[i] = *jsonDesc
 		// write private key to file
-		base64PrivateKey := base64.StdEncoding.EncodeToString(aPrivKey.Bytes())
-		privateKeyFile := path.Join(keysDir, fmt.Sprintf("%s.provider_privatekey_base64", jsonDesc.Name))
+		headers := map[string]string{
+			"Name": provider.Name,
+		}
+		block := pem.Block{
+			Type:    "PROVIDER WIRE PRIVATE KEY",
+			Headers: headers,
+			Bytes:   aPrivKey.Bytes(),
+		}
+		buf := new(bytes.Buffer)
+		pem.Encode(buf, &block)
+		privateKeyFile := path.Join(keysDir, fmt.Sprintf("%s.provider_privatekey.pem", jsonDesc.Name))
 		fileMode := os.FileMode(0600)
-		ioutil.WriteFile(privateKeyFile, []byte(base64PrivateKey), fileMode)
+		ioutil.WriteFile(privateKeyFile, buf.Bytes(), fileMode)
 	}
 	for i, mix := range mixes {
 		aPrivKey, err := ecdh.NewKeypair(rand.Reader)
@@ -166,10 +176,23 @@ func main() {
 		jsonDesc := desc.JsonMixDescriptor()
 		jsonPKI.MixDescriptors[i] = *jsonDesc
 		// write private key to file
-		base64PrivateKey := base64.StdEncoding.EncodeToString(aPrivKey.Bytes())
-		privateKeyFile := path.Join(keysDir, fmt.Sprintf("%s.mix_privatekey_base64", jsonDesc.Nickname))
+
+		headers := map[string]string{
+			"Nickname": mix.Name,
+		}
+		block := pem.Block{
+			Type:    "MIX WIRE PRIVATE KEY",
+			Headers: headers,
+			Bytes:   aPrivKey.Bytes(),
+		}
+		buf := new(bytes.Buffer)
+		pem.Encode(buf, &block)
+		privateKeyFile := path.Join(keysDir, fmt.Sprintf("%s.mix_privatekey.pem", jsonDesc.Nickname))
 		fileMode := os.FileMode(0600)
-		ioutil.WriteFile(privateKeyFile, []byte(base64PrivateKey), fileMode)
+		err = ioutil.WriteFile(privateKeyFile, buf.Bytes(), fileMode)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	// write one json mix network consensus file
