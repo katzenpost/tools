@@ -1,4 +1,4 @@
-// main.go - generate static mix pki json document
+// main.go - generate static mix pki cbor document
 // Copyright (C) 2017  David Anthony Stainton
 //
 // This program is free software: you can redistribute it and/or modify
@@ -18,55 +18,54 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
-	"encoding/pem"
+	"errors"
 	"flag"
-	"fmt"
-	"io/ioutil"
-	"os"
-	"path"
 
+	"github.com/2tvenom/cbor"
+	"github.com/katzenpost/client/mix_pki"
 	"github.com/katzenpost/core/crypto/ecdh"
 	"github.com/katzenpost/core/crypto/rand"
+	"github.com/katzenpost/core/epochtime"
 	"github.com/katzenpost/core/pki"
-	"github.com/katzenpost/core/sphinx/constants"
 )
 
-func MakeMixDescriptor(name string, layer int, publicKey *ecdh.PublicKey, ip string, port int) *pki.MixDescriptor {
-	id := [constants.NodeIDLength]byte{}
-	_, err := rand.Reader.Read(id[:])
+type MixDescriptorSecrets struct {
+	LinkPrivKey *ecdh.PrivateKey
+	EpocSecrets map[ecdh.PublicKey]*ecdh.PrivateKey
+}
+
+func createMixDescriptor(name string, layer uint8, addresses []string, startEpoch, endEpoch uint64) (*pki.MixDescriptor, *MixDescriptorSecrets, error) {
+	LinkPrivKey, err := ecdh.NewKeypair(rand.Reader)
 	if err != nil {
-		panic(err)
+		return nil, nil, err
 	}
-	d := pki.MixDescriptor{
-		Nickname:        name,
-		ID:              id,
-		LoadWeight:      3,
-		TopologyLayer:   uint8(layer),
-		EpochAPublicKey: publicKey,
-		Ipv4Address:     ip,
-		TcpPort:         port,
+	mixKeys := make(map[uint64]*ecdh.PublicKey)
+	EpocSecrets := make(map[ecdh.PublicKey]*ecdh.PrivateKey)
+	for i := startEpoch; i < endEpoch+1; i++ {
+		mixPrivKey, err := ecdh.NewKeypair(rand.Reader)
+		if err != nil {
+			return nil, nil, err
+		}
+		mixKeys[i] = mixPrivKey.PublicKey()
+		pubKey := mixPrivKey.PublicKey()
+		EpocSecrets[*pubKey] = mixPrivKey
 	}
-	return &d
+	secrets := MixDescriptorSecrets{
+		LinkPrivKey: LinkPrivKey,
+		EpocSecrets: EpocSecrets,
+	}
+	descriptor := pki.MixDescriptor{
+		Name:       name,
+		LinkKey:    LinkPrivKey.PublicKey(),
+		MixKeys:    mixKeys,
+		Addresses:  addresses,
+		Layer:      layer,
+		LoadWeight: 0,
+	}
+	return &descriptor, &secrets, nil
 }
 
-func MakeProviderDescriptor(name string, layer int, publicKey *ecdh.PublicKey, ip string, port int) *pki.ProviderDescriptor {
-	d := pki.ProviderDescriptor{
-		Name:              name,
-		LongtermPublicKey: publicKey,
-		Ipv4Address:       ip,
-		TcpPort:           port,
-	}
-	return &d
-}
-
-func main() {
-	var keysDir, pkiFile string
-
-	flag.StringVar(&keysDir, "keysDir", "", "mix keys dir")
-	flag.StringVar(&pkiFile, "mixPKIFile", "", "consensus file path")
-	flag.Parse()
-
+func newMixPKI() (pki.Client, map[ecdh.PublicKey]*ecdh.PrivateKey, error) {
 	type testDesc struct {
 		Name  string
 		Layer int
@@ -74,34 +73,34 @@ func main() {
 		Port  int
 	}
 
-	providers := []testDesc{
+	test_providers := []testDesc{
 		{
 			Name:  "acme.com",
-			Layer: 1,
+			Layer: 0,
 			IP:    "127.0.0.1",
 			Port:  11240,
 		},
 		{
 			Name:  "nsa.gov",
-			Layer: 1,
+			Layer: 0,
 			IP:    "127.0.0.1",
 			Port:  11241,
 		},
 		{
 			Name:  "gchq.uk",
-			Layer: 1,
+			Layer: 0,
 			IP:    "127.0.0.1",
 			Port:  11242,
 		},
 		{
 			Name:  "fsb.ru",
-			Layer: 1,
+			Layer: 0,
 			IP:    "127.0.0.1",
 			Port:  11243,
 		},
 	}
 
-	mixes := []testDesc{
+	test_mixes := []testDesc{
 		{
 			Name:  "nsamix101",
 			Layer: 1,
@@ -140,69 +139,98 @@ func main() {
 		},
 	}
 
-	jsonPKI := pki.JsonStaticPKI{
-		MixDescriptors:      make([]pki.JsonMixDescriptor, len(mixes)),
-		ProviderDescriptors: make([]pki.JsonProviderDescriptor, len(providers)),
+	layerMax := uint8(3)
+	keysMap := make(map[ecdh.PublicKey]*ecdh.PrivateKey)
+	staticPKI := mix_pki.NewStaticPKI()
+	startEpoch, _, _ := epochtime.Now()
+	providers := []*pki.MixDescriptor{}
+	mixes := []*pki.MixDescriptor{}
+	for _, provider := range test_providers {
+		mockAddr := []string{} // XXX fix me?
+		descriptor, descriptorSecrets, err := createMixDescriptor(provider.Name, uint8(provider.Layer), mockAddr, startEpoch, startEpoch+3)
+		if err != nil {
+			return nil, nil, err
+		}
+		providers = append(providers, descriptor)
+		for pubKey, privKey := range descriptorSecrets.EpocSecrets {
+			keysMap[pubKey] = privKey
+		}
 	}
-	for i, provider := range providers {
-		aPrivKey, err := ecdh.NewKeypair(rand.Reader)
+	for _, mix := range test_mixes {
+		mockAddr := []string{} // XXX fix me?
+		descriptor, descriptorSecrets, err := createMixDescriptor(mix.Name, uint8(mix.Layer), mockAddr, startEpoch, startEpoch+3)
 		if err != nil {
-			panic(err)
+			return nil, nil, err
 		}
-		desc := MakeProviderDescriptor(provider.Name, provider.Layer, aPrivKey.PublicKey(), provider.IP, provider.Port)
-		jsonDesc := desc.JsonProviderDescriptor()
-		jsonPKI.ProviderDescriptors[i] = *jsonDesc
-		// write private key to file
-		headers := map[string]string{
-			"Name": provider.Name,
-		}
-		block := pem.Block{
-			Type:    "PROVIDER WIRE PRIVATE KEY",
-			Headers: headers,
-			Bytes:   aPrivKey.Bytes(),
-		}
-		buf := new(bytes.Buffer)
-		pem.Encode(buf, &block)
-		privateKeyFile := path.Join(keysDir, fmt.Sprintf("%s.provider_privatekey.pem", jsonDesc.Name))
-		fileMode := os.FileMode(0600)
-		ioutil.WriteFile(privateKeyFile, buf.Bytes(), fileMode)
-	}
-	for i, mix := range mixes {
-		aPrivKey, err := ecdh.NewKeypair(rand.Reader)
-		if err != nil {
-			panic(err)
-		}
-		desc := MakeMixDescriptor(mix.Name, mix.Layer, aPrivKey.PublicKey(), mix.IP, mix.Port)
-		jsonDesc := desc.JsonMixDescriptor()
-		jsonPKI.MixDescriptors[i] = *jsonDesc
-		// write private key to file
-
-		headers := map[string]string{
-			"Nickname": mix.Name,
-		}
-		block := pem.Block{
-			Type:    "MIX WIRE PRIVATE KEY",
-			Headers: headers,
-			Bytes:   aPrivKey.Bytes(),
-		}
-		buf := new(bytes.Buffer)
-		pem.Encode(buf, &block)
-		privateKeyFile := path.Join(keysDir, fmt.Sprintf("%s.mix_privatekey.pem", jsonDesc.Nickname))
-		fileMode := os.FileMode(0600)
-		err = ioutil.WriteFile(privateKeyFile, buf.Bytes(), fileMode)
-		if err != nil {
-			panic(err)
+		mixes = append(mixes, descriptor)
+		for pubKey, privKey := range descriptorSecrets.EpocSecrets {
+			keysMap[pubKey] = privKey
 		}
 	}
 
-	// write one json mix network consensus file
-	jsonBytes, err := json.MarshalIndent(jsonPKI, "", "    ")
+	// for each epoch create a PKI Document and index it by epoch
+	for current := startEpoch; current < startEpoch+3+1; current++ {
+		pkiDocument := pki.Document{
+			Epoch: current,
+		}
+		// topology
+		pkiDocument.Topology = make([][]*pki.MixDescriptor, layerMax+1)
+		for i := uint8(0); i < layerMax; i++ {
+			pkiDocument.Topology[i] = make([]*pki.MixDescriptor, 0)
+		}
+		for i := uint8(0); i < layerMax+1; i++ {
+			for _, mix := range mixes {
+				if mix.Layer == i {
+					pkiDocument.Topology[i] = append(pkiDocument.Topology[i], mix)
+				}
+			}
+		}
+		// providers
+		for _, provider := range providers {
+			pkiDocument.Providers = append(pkiDocument.Providers, provider)
+		}
+		// setup our epoch -> document map
+		staticPKI.Set(current, &pkiDocument)
+	}
+	return staticPKI, keysMap, nil
+}
+
+func main() {
+	var keysDir, pkiFile string
+
+	flag.StringVar(&keysDir, "keysDir", "", "mix keys dir")
+	flag.StringVar(&pkiFile, "mixPKIFile", "", "consensus file path")
+	flag.Parse()
+
+	pkiClient, keysMap, err := newMixPKI()
+	documents := []pki.Document{}
+	epoch, _, _ := epochtime.Now()
+	for i := epoch; i < epoch+4; i++ {
+		pkiDoc, err := pkiClient.Get(epoch)
+		if err != nil {
+			panic(err)
+		}
+		documents = append(documents, *pkiDoc)
+	}
+
+	var fileBuff bytes.Buffer
+	encoder := cbor.NewEncoder(&fileBuff)
+	ok, err := encoder.Marshal(documents)
 	if err != nil {
 		panic(err)
 	}
-	fileMode := os.FileMode(0600)
-	err = ioutil.WriteFile(pkiFile, jsonBytes, fileMode)
+	if !ok {
+		errors.New("wtf")
+	}
+
+	fileBuff = bytes.Buffer{}
+	encoder = cbor.NewEncoder(&fileBuff)
+	ok, err = encoder.Marshal(keysMap)
 	if err != nil {
 		panic(err)
 	}
+	if !ok {
+		errors.New("wtf")
+	}
+
 }
