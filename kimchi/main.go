@@ -25,8 +25,10 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sync"
 	"syscall"
 
+	"github.com/hpcloud/tail"
 	aServer "github.com/katzenpost/authority/nonvoting/server"
 	aConfig "github.com/katzenpost/authority/nonvoting/server/config"
 	"github.com/katzenpost/core/crypto/eddsa"
@@ -42,8 +44,18 @@ const (
 	nrProviders = 2
 )
 
+var tailConfig = tail.Config{
+	Poll:   true,
+	Follow: true,
+	Logger: tail.DiscardingLogger,
+}
+
 type kimchi struct {
-	baseDir string
+	sync.Mutex
+	sync.WaitGroup
+
+	baseDir   string
+	logWriter io.Writer
 
 	authConfig    *aConfig.Config
 	authIdentity  *eddsa.PrivateKey
@@ -56,6 +68,7 @@ type kimchi struct {
 	providerIdx int
 
 	servers []server
+	tails   []*tail.Tail
 }
 
 type server interface {
@@ -71,8 +84,8 @@ func (s *kimchi) initLogging() error {
 	}
 
 	// Log to both stdout *and* the log file.
-	w := io.MultiWriter(f, os.Stdout)
-	log.SetOutput(w)
+	s.logWriter = io.MultiWriter(f, os.Stdout)
+	log.SetOutput(s.logWriter)
 
 	return nil
 }
@@ -159,6 +172,26 @@ func (s *kimchi) genAuthConfig() error {
 	return nil
 }
 
+func (s *kimchi) logTailer(prefix, path string) {
+	s.Add(1)
+	defer s.Done()
+
+	l := log.New(s.logWriter, prefix+" ", 0)
+	t, err := tail.TailFile(path, tailConfig)
+	defer t.Cleanup()
+	if err != nil {
+		log.Fatalf("Failed to tail file '%v': %v", path, err)
+	}
+
+	s.Lock()
+	s.tails = append(s.tails, t)
+	s.Unlock()
+
+	for line := range t.Lines {
+		l.Print(line.Text)
+	}
+}
+
 func main() {
 	var err error
 
@@ -208,6 +241,7 @@ func main() {
 		log.Fatalf("Failed to launch authority: %v", err)
 	}
 	s.servers = append(s.servers, svr)
+	go s.logTailer("authority", filepath.Join(s.authConfig.Authority.DataDir, s.authConfig.Logging.File))
 
 	// Launch all the nodes.
 	for _, v := range s.nodeConfigs {
@@ -216,6 +250,8 @@ func main() {
 			log.Fatalf("Failed to launch node: %v", err)
 		}
 		s.servers = append(s.servers, svr)
+
+		go s.logTailer(v.Server.Identifier, filepath.Join(v.Server.DataDir, v.Logging.File))
 	}
 
 	// XXX: Thwack the users.
@@ -226,7 +262,18 @@ func main() {
 	ch := make(chan os.Signal)
 	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
 	<-ch
+	log.Printf("Kimchi, received shutdown request.")
 	for _, svr = range s.servers {
 		svr.Shutdown()
 	}
+
+	// Wait for the log tailers to return.  This typically won't re-log the
+	// shutdown sequence, but if people need the logs from that, they will
+	// be in each `DataDir` as needed.
+	for _, t := range s.tails {
+		t.StopAtEOF()
+	}
+	s.Wait()
+
+	log.Printf("Kimchi terminated.")
 }
