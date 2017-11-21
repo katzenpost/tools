@@ -129,7 +129,10 @@ func (s *kimchi) genNodeConfig(isProvider bool) error {
 	aNode := new(aConfig.Node)
 	aNode.IdentityKey = identity.PublicKey()
 	if isProvider {
-		// XXX: Management interface.
+		// Enable the thwack interface.
+		cfg.Management = new(sConfig.Management)
+		cfg.Management.Enable = true
+
 		aNode.Identifier = cfg.Server.Identifier
 		s.authProviders = append(s.authProviders, aNode)
 		s.providerIdx++
@@ -262,10 +265,11 @@ func main() {
 	ch := make(chan os.Signal)
 	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
 	<-ch
-	log.Printf("Kimchi, received shutdown request.")
+	log.Printf("Received shutdown request.")
 	for _, svr = range s.servers {
 		svr.Shutdown()
 	}
+	log.Printf("All servers halted.")
 
 	// Wait for the log tailers to return.  This typically won't re-log the
 	// shutdown sequence, but if people need the logs from that, they will
@@ -274,6 +278,5 @@ func main() {
 		t.StopAtEOF()
 	}
 	s.Wait()
-
-	log.Printf("Kimchi terminated.")
+	log.Printf("Terminated.")
 }
