@@ -32,7 +32,10 @@ import (
 	"github.com/hpcloud/tail"
 	aServer "github.com/katzenpost/authority/nonvoting/server"
 	aConfig "github.com/katzenpost/authority/nonvoting/server/config"
+	"github.com/katzenpost/client"
 	cConfig "github.com/katzenpost/client/config"
+	"github.com/katzenpost/client/user_pki"
+	"github.com/katzenpost/core/crypto/ecdh"
 	"github.com/katzenpost/core/crypto/eddsa"
 	"github.com/katzenpost/core/crypto/rand"
 	"github.com/katzenpost/core/epochtime"
@@ -181,7 +184,7 @@ func (s *kimchi) genAuthConfig() error {
 	return nil
 }
 
-func (s *kimchi) genClientConfig(name string, providerIndex int, basePort int) {
+func (s *kimchi) genClientConfig(name, provider string, port int) error {
 	const clientLogFile = "katzenpost.log"
 
 	cfg := new(cConfig.Config)
@@ -195,7 +198,7 @@ func (s *kimchi) genClientConfig(name string, providerIndex int, basePort int) {
 	// Account section
 	account := new(cConfig.Account)
 	account.Name = name
-	account.Provider = s.authProviders[providerIndex].Identifier
+	account.Provider = provider
 	cfg.Account = append(cfg.Account, *account)
 
 	// PKI section
@@ -205,16 +208,17 @@ func (s *kimchi) genClientConfig(name string, providerIndex int, basePort int) {
 	cfg.PKI.Nonvoting.PublicKey = s.authIdentity.PublicKey().String()
 
 	smtpProxy := new(cConfig.Proxy)
-	smtpProxy.Network = "tcp4"
-	smtpProxy.Address = fmt.Sprintf("127.0.0.1:%s", basePort)
+	smtpProxy.Network = "tcp"
+	smtpProxy.Address = fmt.Sprintf("127.0.0.1:%d", port)
 	cfg.SMTPProxy = smtpProxy
 
 	pop3Proxy := new(cConfig.Proxy)
-	pop3Proxy.Network = "tcp4"
-	pop3Proxy.Address = fmt.Sprintf("127.0.0.1:%s", basePort+1)
+	pop3Proxy.Network = "tcp"
+	pop3Proxy.Address = fmt.Sprintf("127.0.0.1:%d", port+1)
 	cfg.POP3Proxy = pop3Proxy
 
 	s.clientConfigs = append(s.clientConfigs, cfg)
+	return cfg.FixupAndValidate()
 }
 
 func (s *kimchi) logTailer(prefix, path string) {
@@ -306,8 +310,48 @@ func main() {
 	}
 
 	// XXX: Thwack the users.
-	s.genClientConfig("alice", 0, 4000)
-	s.genClientConfig("bob", 1, 4002)
+
+	// Launch clients
+
+	alicePrivateKey, err := ecdh.NewKeypair(rand.Reader)
+	bobPrivateKey, err := ecdh.NewKeypair(rand.Reader)
+	userPKI := &user_pki.JsonFileUserPKI{
+		UserMap: make(map[string]*ecdh.PublicKey),
+	}
+
+	aliceProvider := s.authProviders[0].Identifier
+	aliceKeysMap := make(cConfig.AccountsMap)
+	aliceEmail := fmt.Sprintf("alice@%s", aliceProvider)
+	aliceKeysMap[aliceEmail] = alicePrivateKey
+
+	bobProvider := s.authProviders[1].Identifier
+	bobKeysMap := make(cConfig.AccountsMap)
+	bobEmail := fmt.Sprintf("bob@%s", bobProvider)
+	bobKeysMap[bobEmail] = bobPrivateKey
+
+	userPKI.UserMap[aliceEmail] = alicePrivateKey.PublicKey()
+	userPKI.UserMap[bobEmail] = bobPrivateKey.PublicKey()
+
+	err = s.genClientConfig("alice", aliceProvider, 4000)
+	if err != nil {
+		log.Fatalf("Failed to generate client config: %v", err)
+	}
+	err = s.genClientConfig("bob", bobProvider, 4002)
+	if err != nil {
+		log.Fatalf("Failed to generate client config: %v", err)
+	}
+
+	aliceClient, err := client.New(s.clientConfigs[0], &aliceKeysMap, userPKI)
+	if err != nil {
+		log.Fatalf("Failed to launch client: %v", err)
+	}
+	defer aliceClient.Shutdown()
+
+	bobClient, err := client.New(s.clientConfigs[1], &bobKeysMap, userPKI)
+	if err != nil {
+		log.Fatalf("Failed to launch client: %v", err)
+	}
+	defer bobClient.Shutdown()
 
 	// XXX: Log a bunch of stuff.
 
