@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/hpcloud/tail"
 	aServer "github.com/katzenpost/authority/nonvoting/server"
@@ -34,6 +35,7 @@ import (
 	cConfig "github.com/katzenpost/client/config"
 	"github.com/katzenpost/core/crypto/eddsa"
 	"github.com/katzenpost/core/crypto/rand"
+	"github.com/katzenpost/core/epochtime"
 	nServer "github.com/katzenpost/server"
 	sConfig "github.com/katzenpost/server/config"
 )
@@ -238,6 +240,12 @@ func main() {
 		os.Exit(-1)
 	}
 	log.Printf("Base Directory: %v", s.baseDir)
+
+	now, elapsed, till := epochtime.Now()
+	log.Printf("Epoch: %v (Elapsed: %v, Till: %v)", now, elapsed, till)
+	if till < epochtime.Period - (3600 * time.Second) {
+		log.Printf("WARNING: Descriptor publication for the next epoch will FAIL.")
+	}
 
 	// Generate the authority identity key.
 	if s.authIdentity, err = eddsa.NewKeypair(rand.Reader); err != nil {
