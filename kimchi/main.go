@@ -1,5 +1,5 @@
 // kimchi.go - Katzenpost self contained test network.
-// Copyright (C) 2017  Yawning Angel.
+// Copyright (C) 2017  Yawning Angel, David Stainton.
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Affero General Public License as
@@ -182,11 +182,36 @@ func (s *kimchi) genAuthConfig() error {
 }
 
 func (s *kimchi) genClientConfig(name string, providerIndex int, basePort int) {
+	const clientLogFile = "katzenpost.log"
+
 	cfg := new(cConfig.Config)
+	cfg.DataDir = filepath.Join(s.baseDir, fmt.Sprintf("client-%s", name))
+
+	// Logging section.
+	cfg.Logging = new(cConfig.Logging)
+	cfg.Logging.File = clientLogFile
+	cfg.Logging.Level = "DEBUG"
+
+	// Account section
 	account := new(cConfig.Account)
 	account.Name = name
 	account.Provider = s.authProviders[providerIndex].Identifier
 	cfg.Account = append(cfg.Account, *account)
+
+	// PKI section
+	cfg.PKI = new(cConfig.PKI)
+	cfg.PKI.Nonvoting = new(sConfig.Nonvoting)
+	cfg.PKI.Nonvoting.Address = fmt.Sprintf("127.0.0.1:%d", basePort)
+	cfg.PKI.Nonvoting.PublicKey = s.authIdentity.PublicKey().String()
+
+	// ProviderPinning section
+	providerPinning := new(cConfig.ProviderPinning)
+	// XXX FIX ME!
+	//providerPinning.PublicKey = s.authProviders[providerIndex].IdentityKey.String()
+	providerPinning.Name = string(s.authProviders[providerIndex].Identifier)
+	cfg.ProviderPinning = []ProviderPinning{
+		providerPinning,
+	}
 
 	smtpProxy := new(cConfig.Proxy)
 	smtpProxy.Network = "tcp4"
@@ -243,7 +268,7 @@ func main() {
 
 	now, elapsed, till := epochtime.Now()
 	log.Printf("Epoch: %v (Elapsed: %v, Till: %v)", now, elapsed, till)
-	if till < epochtime.Period - (3600 * time.Second) {
+	if till < epochtime.Period-(3600*time.Second) {
 		log.Printf("WARNING: Descriptor publication for the next epoch will FAIL.")
 	}
 
