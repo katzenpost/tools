@@ -31,6 +31,7 @@ import (
 	"github.com/hpcloud/tail"
 	aServer "github.com/katzenpost/authority/nonvoting/server"
 	aConfig "github.com/katzenpost/authority/nonvoting/server/config"
+	cConfig "github.com/katzenpost/client/config"
 	"github.com/katzenpost/core/crypto/eddsa"
 	"github.com/katzenpost/core/crypto/rand"
 	nServer "github.com/katzenpost/server"
@@ -42,6 +43,7 @@ const (
 	basePort    = 30000
 	nrNodes     = 6
 	nrProviders = 2
+	nrClients   = 2
 )
 
 var tailConfig = tail.Config{
@@ -66,6 +68,8 @@ type kimchi struct {
 	lastPort    uint16
 	nodeIdx     int
 	providerIdx int
+
+	clientConfigs []*cConfig.Config
 
 	servers []server
 	tails   []*tail.Tail
@@ -175,6 +179,26 @@ func (s *kimchi) genAuthConfig() error {
 	return nil
 }
 
+func (s *kimchi) genClientConfig(name string, providerIndex int, basePort int) {
+	cfg := new(cConfig.Config)
+	account := new(cConfig.Account)
+	account.Name = name
+	account.Provider = s.authProviders[providerIndex].Identifier
+	cfg.Account = append(cfg.Account, *account)
+
+	smtpProxy := new(cConfig.Proxy)
+	smtpProxy.Network = "tcp4"
+	smtpProxy.Address = fmt.Sprintf("127.0.0.1:%s", basePort)
+	cfg.SMTPProxy = *smtpProxy
+
+	pop3Proxy := new(cConfig.Proxy)
+	pop3Proxy.Network = "tcp4"
+	pop3Proxy.Address = fmt.Sprintf("127.0.0.1:%s", basePort+1)
+	cfg.POP3Proxy = *pop3Proxy
+
+	s.clientConfigs = append(s.clientConfigs, cfg)
+}
+
 func (s *kimchi) logTailer(prefix, path string) {
 	s.Add(1)
 	defer s.Done()
@@ -258,6 +282,8 @@ func main() {
 	}
 
 	// XXX: Thwack the users.
+	s.genClientConfig("alice", 0, 4000)
+	s.genClientConfig("bob", 1, 4002)
 
 	// XXX: Log a bunch of stuff.
 
