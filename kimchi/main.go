@@ -200,28 +200,19 @@ func (s *kimchi) genClientConfig(name string, providerIndex int, basePort int) {
 
 	// PKI section
 	cfg.PKI = new(cConfig.PKI)
-	cfg.PKI.Nonvoting = new(sConfig.Nonvoting)
+	cfg.PKI.Nonvoting = new(cConfig.Nonvoting)
 	cfg.PKI.Nonvoting.Address = fmt.Sprintf("127.0.0.1:%d", basePort)
 	cfg.PKI.Nonvoting.PublicKey = s.authIdentity.PublicKey().String()
-
-	// ProviderPinning section
-	providerPinning := new(cConfig.ProviderPinning)
-	// XXX FIX ME!
-	//providerPinning.PublicKey = s.authProviders[providerIndex].IdentityKey.String()
-	providerPinning.Name = string(s.authProviders[providerIndex].Identifier)
-	cfg.ProviderPinning = []ProviderPinning{
-		providerPinning,
-	}
 
 	smtpProxy := new(cConfig.Proxy)
 	smtpProxy.Network = "tcp4"
 	smtpProxy.Address = fmt.Sprintf("127.0.0.1:%s", basePort)
-	cfg.SMTPProxy = *smtpProxy
+	cfg.SMTPProxy = smtpProxy
 
 	pop3Proxy := new(cConfig.Proxy)
 	pop3Proxy.Network = "tcp4"
 	pop3Proxy.Address = fmt.Sprintf("127.0.0.1:%s", basePort+1)
-	cfg.POP3Proxy = *pop3Proxy
+	cfg.POP3Proxy = pop3Proxy
 
 	s.clientConfigs = append(s.clientConfigs, cfg)
 }
