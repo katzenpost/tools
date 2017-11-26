@@ -22,6 +22,8 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"net"
+	"net/textproto"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -241,6 +243,78 @@ func (s *kimchi) logTailer(prefix, path string) {
 	}
 }
 
+func sendMessage(port int, fromEmail, toEmail string) error {
+	conn, err := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	if err != nil {
+		return err
+	}
+	c := textproto.NewConn(conn)
+	defer c.Close()
+
+	// Server speaks first, expecting a banner.
+	l, err := c.ReadLine()
+	log.Printf("S->C: '%s'", l)
+
+	err = c.PrintfLine("helo localhost")
+	if err != nil {
+		return err
+	}
+
+	l, err = c.ReadLine()
+	if err != nil {
+		return err
+	}
+
+	err = c.PrintfLine("mail from:<%s>", fromEmail)
+	if err != nil {
+		return err
+	}
+
+	l, err = c.ReadLine()
+	if err != nil {
+		return err
+	}
+	log.Printf("S->C: '%s'", l)
+
+	err = c.PrintfLine("rcpt to:<%s>", toEmail)
+	if err != nil {
+		return err
+	}
+
+	l, err = c.ReadLine()
+	if err != nil {
+		return err
+	}
+	log.Printf("S->C: '%s'", l)
+
+	err = c.PrintfLine("DATA")
+	if err != nil {
+		return err
+	}
+
+	l, err = c.ReadLine()
+	if err != nil {
+		return err
+	}
+	log.Printf("S->C: '%s'", l)
+
+	err = c.PrintfLine("Subject: hello\r\n")
+	if err != nil {
+		return err
+	}
+
+	err = c.PrintfLine("super short message because byte stuffing is hard")
+	if err != nil {
+		return err
+	}
+
+	err = c.PrintfLine("\r\n.\r\n")
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func main() {
 	var err error
 
@@ -352,6 +426,8 @@ func main() {
 		log.Fatalf("Failed to launch client: %v", err)
 	}
 	defer bobClient.Shutdown()
+
+	sendMessage(4000, aliceEmail, bobEmail)
 
 	// XXX: Log a bunch of stuff.
 
