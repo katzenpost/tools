@@ -41,6 +41,7 @@ import (
 	"github.com/katzenpost/core/crypto/eddsa"
 	"github.com/katzenpost/core/crypto/rand"
 	"github.com/katzenpost/core/epochtime"
+	"github.com/katzenpost/core/thwack"
 	nServer "github.com/katzenpost/server"
 	sConfig "github.com/katzenpost/server/config"
 )
@@ -223,6 +224,31 @@ func (s *kimchi) genClientConfig(name, provider string, port int) error {
 	return cfg.FixupAndValidate()
 }
 
+func (s *kimchi) thwackUser(provider *sConfig.Config, user string, pubKey *ecdh.PublicKey) error {
+	log.Printf("Attempting to add user: %v@%v", user, provider.Server.Identifier)
+
+	sockFn := filepath.Join(provider.Server.DataDir, "management_sock")
+	c, err := textproto.Dial("unix", sockFn)
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+
+	if _, _, err = c.ReadResponse(int(thwack.StatusServiceReady)); err != nil {
+		return err
+	}
+
+	if err = c.PrintfLine("ADD_USER %v %v", user, pubKey); err != nil {
+		return err
+	}
+	if _, _, err = c.ReadResponse(int(thwack.StatusOk)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+
 func (s *kimchi) logTailer(prefix, path string) {
 	s.Add(1)
 	defer s.Done()
@@ -383,10 +409,8 @@ func main() {
 		go s.logTailer(v.Server.Identifier, filepath.Join(v.Server.DataDir, v.Logging.File))
 	}
 
-	// XXX: Thwack the users.
 
 	// Launch clients
-
 	alicePrivateKey, err := ecdh.NewKeypair(rand.Reader)
 	bobPrivateKey, err := ecdh.NewKeypair(rand.Reader)
 	userPKI := &user_pki.JsonFileUserPKI{
@@ -397,11 +421,17 @@ func main() {
 	aliceKeysMap := make(cConfig.AccountsMap)
 	aliceEmail := fmt.Sprintf("alice@%s", aliceProvider)
 	aliceKeysMap[aliceEmail] = alicePrivateKey
+	if err = s.thwackUser(s.nodeConfigs[0], "alice", alicePrivateKey.PublicKey()); err != nil {
+		log.Fatalf("Failed to add user: %v", err)
+	}
 
 	bobProvider := s.authProviders[1].Identifier
 	bobKeysMap := make(cConfig.AccountsMap)
 	bobEmail := fmt.Sprintf("bob@%s", bobProvider)
 	bobKeysMap[bobEmail] = bobPrivateKey
+	if err = s.thwackUser(s.nodeConfigs[1], "bob", bobPrivateKey.PublicKey()); err != nil {
+		log.Fatalf("Failed to add user: %v", err)
+	}
 
 	userPKI.UserMap[aliceEmail] = alicePrivateKey.PublicKey()
 	userPKI.UserMap[bobEmail] = bobPrivateKey.PublicKey()
