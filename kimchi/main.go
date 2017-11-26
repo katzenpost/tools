@@ -427,7 +427,10 @@ func main() {
 	}
 	defer bobClient.Shutdown()
 
-	sendMessage(4000, aliceEmail, bobEmail)
+	err = sendMessage(4000, aliceEmail, bobEmail)
+	if err != nil {
+		log.Fatalf("Alice failed to send Bob a message: %v", err)
+	}
 
 	// XXX: Log a bunch of stuff.
 
