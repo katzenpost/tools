@@ -32,16 +32,17 @@ import (
 	"time"
 
 	"github.com/hpcloud/tail"
+	nClient "github.com/katzenpost/authority/nonvoting/client"
 	aServer "github.com/katzenpost/authority/nonvoting/server"
 	aConfig "github.com/katzenpost/authority/nonvoting/server/config"
-	"github.com/katzenpost/client"
-	cConfig "github.com/katzenpost/client/config"
-	"github.com/katzenpost/client/user_pki"
 	"github.com/katzenpost/core/crypto/ecdh"
 	"github.com/katzenpost/core/crypto/eddsa"
 	"github.com/katzenpost/core/crypto/rand"
 	"github.com/katzenpost/core/epochtime"
+	cLog "github.com/katzenpost/core/log"
+	"github.com/katzenpost/core/pki"
 	"github.com/katzenpost/core/thwack"
+	"github.com/katzenpost/minclient"
 	nServer "github.com/katzenpost/server"
 	sConfig "github.com/katzenpost/server/config"
 )
@@ -71,13 +72,12 @@ type kimchi struct {
 	authIdentity  *eddsa.PrivateKey
 	authNodes     []*aConfig.Node
 	authProviders []*aConfig.Node
+	authClient    pki.Client
 
 	nodeConfigs []*sConfig.Config
 	lastPort    uint16
 	nodeIdx     int
 	providerIdx int
-
-	clientConfigs []*cConfig.Config
 
 	servers []server
 	tails   []*tail.Tail
@@ -187,41 +187,27 @@ func (s *kimchi) genAuthConfig() error {
 	return nil
 }
 
-func (s *kimchi) genClientConfig(name, provider string, port int) error {
-	const clientLogFile = "katzenpost.log"
+func (s *kimchi) newMinClient(user, provider string, privateKey *ecdh.PrivateKey) (*minclient.Client, error) {
+	dispName := fmt.Sprintf("minclient-%v@%v", user, provider)
+	minclientLogFile := filepath.Join(s.baseDir, fmt.Sprintf("%v.log", dispName))
+	minclientLog, err := cLog.New(minclientLogFile, "DEBUG", false)
+	if err != nil {
+		log.Fatalf("Failed to create minclient logger: %v", err)
+	}
+	cfg := &minclient.ClientConfig{
+		User:        user,
+		Provider:    provider,
+		IdentityKey: privateKey,
+		LogBackend:  minclientLog,
+		PKIClient:   s.authClient,
+	}
+	c, err := minclient.New(cfg)
+	if err != nil {
+		return nil, err
+	}
 
-	cfg := new(cConfig.Config)
-	cfg.DataDir = filepath.Join(s.baseDir, fmt.Sprintf("client-%s", name))
-
-	// Logging section.
-	cfg.Logging = new(cConfig.Logging)
-	cfg.Logging.File = clientLogFile
-	cfg.Logging.Level = "DEBUG"
-
-	// Account section
-	account := new(cConfig.Account)
-	account.Name = name
-	account.Provider = provider
-	cfg.Account = append(cfg.Account, *account)
-
-	// PKI section
-	cfg.PKI = new(cConfig.PKI)
-	cfg.PKI.Nonvoting = new(cConfig.Nonvoting)
-	cfg.PKI.Nonvoting.Address = fmt.Sprintf("127.0.0.1:%d", basePort)
-	cfg.PKI.Nonvoting.PublicKey = s.authIdentity.PublicKey().String()
-
-	smtpProxy := new(cConfig.Proxy)
-	smtpProxy.Network = "tcp"
-	smtpProxy.Address = fmt.Sprintf("127.0.0.1:%d", port)
-	cfg.SMTPProxy = smtpProxy
-
-	pop3Proxy := new(cConfig.Proxy)
-	pop3Proxy.Network = "tcp"
-	pop3Proxy.Address = fmt.Sprintf("127.0.0.1:%d", port+1)
-	cfg.POP3Proxy = pop3Proxy
-
-	s.clientConfigs = append(s.clientConfigs, cfg)
-	return cfg.FixupAndValidate()
+	go s.logTailer(dispName, minclientLogFile)
+	return c, nil
 }
 
 func (s *kimchi) thwackUser(provider *sConfig.Config, user string, pubKey *ecdh.PublicKey) error {
@@ -247,7 +233,6 @@ func (s *kimchi) thwackUser(provider *sConfig.Config, user string, pubKey *ecdh.
 
 	return nil
 }
-
 
 func (s *kimchi) logTailer(prefix, path string) {
 	s.Add(1)
@@ -409,55 +394,32 @@ func main() {
 		go s.logTailer(v.Server.Identifier, filepath.Join(v.Server.DataDir, v.Logging.File))
 	}
 
-
-	// Launch clients
-	alicePrivateKey, err := ecdh.NewKeypair(rand.Reader)
-	bobPrivateKey, err := ecdh.NewKeypair(rand.Reader)
-	userPKI := &user_pki.JsonFileUserPKI{
-		UserMap: make(map[string]*ecdh.PublicKey),
+	// Create a PKI client instance.
+	authClientLogFile := filepath.Join(s.baseDir, "authority-client.log")
+	authClientLog, err := cLog.New(authClientLogFile, "DEBUG", false)
+	if err != nil {
+		log.Fatalf("Failed to create authority client logger: %v", err)
 	}
+	s.authClient, err = nClient.New(&nClient.Config{
+		LogBackend: authClientLog,
+		Address:    fmt.Sprintf("127.0.0.1:%d", basePort),
+		PublicKey:  s.authIdentity.PublicKey(),
+	})
+	go s.logTailer("authority-client", authClientLogFile)
 
+	// Launch clients.
+	alicePrivateKey, err := ecdh.NewKeypair(rand.Reader)
 	aliceProvider := s.authProviders[0].Identifier
-	aliceKeysMap := make(cConfig.AccountsMap)
-	aliceEmail := fmt.Sprintf("alice@%s", aliceProvider)
-	aliceKeysMap[aliceEmail] = alicePrivateKey
+	aliceClient, err := s.newMinClient("alice", aliceProvider, alicePrivateKey)
+	if err != nil {
+		log.Fatalf("Failed to create alice client: %v", err)
+	}
 	if err = s.thwackUser(s.nodeConfigs[0], "alice", alicePrivateKey.PublicKey()); err != nil {
 		log.Fatalf("Failed to add user: %v", err)
 	}
+	s.servers = append(s.servers, aliceClient)
 
-	bobProvider := s.authProviders[1].Identifier
-	bobKeysMap := make(cConfig.AccountsMap)
-	bobEmail := fmt.Sprintf("bob@%s", bobProvider)
-	bobKeysMap[bobEmail] = bobPrivateKey
-	if err = s.thwackUser(s.nodeConfigs[1], "bob", bobPrivateKey.PublicKey()); err != nil {
-		log.Fatalf("Failed to add user: %v", err)
-	}
-
-	userPKI.UserMap[aliceEmail] = alicePrivateKey.PublicKey()
-	userPKI.UserMap[bobEmail] = bobPrivateKey.PublicKey()
-
-	err = s.genClientConfig("alice", aliceProvider, 4000)
-	if err != nil {
-		log.Fatalf("Failed to generate client config: %v", err)
-	}
-	err = s.genClientConfig("bob", bobProvider, 4002)
-	if err != nil {
-		log.Fatalf("Failed to generate client config: %v", err)
-	}
-
-	aliceClient, err := client.New(s.clientConfigs[0], &aliceKeysMap, userPKI)
-	if err != nil {
-		log.Fatalf("Failed to launch client: %v", err)
-	}
-	defer aliceClient.Shutdown()
-
-	bobClient, err := client.New(s.clientConfigs[1], &bobKeysMap, userPKI)
-	if err != nil {
-		log.Fatalf("Failed to launch client: %v", err)
-	}
-	defer bobClient.Shutdown()
-
-	sendMessage(4000, aliceEmail, bobEmail)
+	//	sendMessage(4000, aliceEmail, bobEmail)
 
 	// XXX: Log a bunch of stuff.
 
