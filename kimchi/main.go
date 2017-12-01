@@ -248,7 +248,6 @@ func (s *kimchi) thwackUser(provider *sConfig.Config, user string, pubKey *ecdh.
 	return nil
 }
 
-
 func (s *kimchi) logTailer(prefix, path string) {
 	s.Add(1)
 	defer s.Done()
@@ -325,6 +324,11 @@ func sendMessage(port int, fromEmail, toEmail string) error {
 	log.Printf("S->C: '%s'", l)
 
 	err = c.PrintfLine("Subject: hello\r\n")
+	if err != nil {
+		return err
+	}
+
+	err = c.PrintfLine("Content-Type: text/html; charset=\"UTF-8\"\r\n")
 	if err != nil {
 		return err
 	}
@@ -408,7 +412,6 @@ func main() {
 
 		go s.logTailer(v.Server.Identifier, filepath.Join(v.Server.DataDir, v.Logging.File))
 	}
-
 
 	// Launch clients
 	alicePrivateKey, err := ecdh.NewKeypair(rand.Reader)
