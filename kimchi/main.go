@@ -410,14 +410,25 @@ func main() {
 	// Launch clients.
 	alicePrivateKey, err := ecdh.NewKeypair(rand.Reader)
 	aliceProvider := s.authProviders[0].Identifier
+	if err = s.thwackUser(s.nodeConfigs[0], "alice", alicePrivateKey.PublicKey()); err != nil {
+		log.Fatalf("Failed to add user: %v", err)
+	}
 	aliceClient, err := s.newMinClient("alice", aliceProvider, alicePrivateKey)
 	if err != nil {
 		log.Fatalf("Failed to create alice client: %v", err)
 	}
-	if err = s.thwackUser(s.nodeConfigs[0], "alice", alicePrivateKey.PublicKey()); err != nil {
+	s.servers = append(s.servers, aliceClient)
+
+	bobPrivateKey, err := ecdh.NewKeypair(rand.Reader)
+	bobProvider := s.authProviders[1].Identifier
+	if err = s.thwackUser(s.nodeConfigs[1], "bob", bobPrivateKey.PublicKey()); err != nil {
 		log.Fatalf("Failed to add user: %v", err)
 	}
-	s.servers = append(s.servers, aliceClient)
+	bobClient, err := s.newMinClient("bob", bobProvider, bobPrivateKey)
+	if err != nil {
+		log.Fatalf("Failed to create bob client: %v", err)
+	}
+	s.servers = append(s.servers, bobClient)
 
 	//	sendMessage(4000, aliceEmail, bobEmail)
 
