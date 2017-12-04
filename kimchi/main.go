@@ -22,7 +22,6 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"net"
 	"net/textproto"
 	"os"
 	"os/signal"
@@ -41,8 +40,10 @@ import (
 	"github.com/katzenpost/core/epochtime"
 	cLog "github.com/katzenpost/core/log"
 	"github.com/katzenpost/core/pki"
+	"github.com/katzenpost/core/sphinx/constants"
 	"github.com/katzenpost/core/thwack"
 	"github.com/katzenpost/minclient"
+	"github.com/katzenpost/minclient/block"
 	nServer "github.com/katzenpost/server"
 	sConfig "github.com/katzenpost/server/config"
 )
@@ -187,27 +188,54 @@ func (s *kimchi) genAuthConfig() error {
 	return nil
 }
 
-func (s *kimchi) newMinClient(user, provider string, privateKey *ecdh.PrivateKey) (*minclient.Client, error) {
+func (s *kimchi) newMinClient(user, provider string, privateKey *ecdh.PrivateKey) (*minclient.Client, chan interface{}, error) {
 	dispName := fmt.Sprintf("minclient-%v@%v", user, provider)
 	minclientLogFile := filepath.Join(s.baseDir, fmt.Sprintf("%v.log", dispName))
 	minclientLog, err := cLog.New(minclientLogFile, "DEBUG", false)
+	lm := minclientLog.GetLogger("callbacks:"+dispName)
 	if err != nil {
 		log.Fatalf("Failed to create minclient logger: %v", err)
 	}
+	onlineCh := make(chan interface{}, 1)
 	cfg := &minclient.ClientConfig{
 		User:        user,
 		Provider:    provider,
-		IdentityKey: privateKey,
+		LinkKey: privateKey,
 		LogBackend:  minclientLog,
 		PKIClient:   s.authClient,
+		OnConnFn:    func(isConnected bool) {
+			lm.Noticef("Peer connection status changed: %v", isConnected)
+			select {
+			case onlineCh <- isConnected:
+			default:
+			}
+		},
+		OnMessageFn: func(b []byte) error {
+			lm.Noticef("Received Message: %v", len(b))
+
+			blk, pk, err := block.DecryptBlock(b, privateKey)
+			if err != nil {
+				lm.Errorf("Failed to decrypt block: %v", err)
+				return nil
+			}
+
+			lm.Noticef("Sender Public Key: %v", pk)
+			lm.Noticef("Message payload: %v", hex.Dump(blk.Payload))
+
+			return nil
+		},
+		OnACKFn: func(id *[constants.SURBIDLength]byte, b []byte) error {
+			return nil
+		},
 	}
 	c, err := minclient.New(cfg)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	go s.logTailer(dispName, minclientLogFile)
-	return c, nil
+
+	return c, onlineCh, nil
 }
 
 func (s *kimchi) thwackUser(provider *sConfig.Config, user string, pubKey *ecdh.PublicKey) error {
@@ -254,76 +282,15 @@ func (s *kimchi) logTailer(prefix, path string) {
 	}
 }
 
-func sendMessage(port int, fromEmail, toEmail string) error {
-	conn, err := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", port))
-	if err != nil {
-		return err
-	}
-	c := textproto.NewConn(conn)
-	defer c.Close()
+func sendUnreliableMsg(client *minclient.Client, senderPrivKey *ecdh.PrivateKey, recipient, provider string, recipientPubKey *ecdh.PublicKey, msg []byte) error {
+	var msgID [block.MessageIDLength]byte
 
-	// Server speaks first, expecting a banner.
-	l, err := c.ReadLine()
-	log.Printf("S->C: '%s'", l)
-
-	err = c.PrintfLine("helo localhost")
+	blocks, err := block.EncryptMessage(&msgID, msg, senderPrivKey, recipientPubKey)
 	if err != nil {
 		return err
 	}
 
-	l, err = c.ReadLine()
-	if err != nil {
-		return err
-	}
-
-	err = c.PrintfLine("mail from:<%s>", fromEmail)
-	if err != nil {
-		return err
-	}
-
-	l, err = c.ReadLine()
-	if err != nil {
-		return err
-	}
-	log.Printf("S->C: '%s'", l)
-
-	err = c.PrintfLine("rcpt to:<%s>", toEmail)
-	if err != nil {
-		return err
-	}
-
-	l, err = c.ReadLine()
-	if err != nil {
-		return err
-	}
-	log.Printf("S->C: '%s'", l)
-
-	err = c.PrintfLine("DATA")
-	if err != nil {
-		return err
-	}
-
-	l, err = c.ReadLine()
-	if err != nil {
-		return err
-	}
-	log.Printf("S->C: '%s'", l)
-
-	err = c.PrintfLine("Subject: hello\r\n")
-	if err != nil {
-		return err
-	}
-
-	err = c.PrintfLine("super short message because byte stuffing is hard")
-	if err != nil {
-		return err
-	}
-
-	err = c.PrintfLine("\r\n.\r\n")
-	if err != nil {
-		return err
-	}
-	return nil
+	return client.SendUnreliableCiphertext(recipient, provider, blocks[0])
 }
 
 func main() {
@@ -413,7 +380,7 @@ func main() {
 	if err = s.thwackUser(s.nodeConfigs[0], "alice", alicePrivateKey.PublicKey()); err != nil {
 		log.Fatalf("Failed to add user: %v", err)
 	}
-	aliceClient, err := s.newMinClient("alice", aliceProvider, alicePrivateKey)
+	aliceClient, aliceOnlineCh, err := s.newMinClient("alice", aliceProvider, alicePrivateKey)
 	if err != nil {
 		log.Fatalf("Failed to create alice client: %v", err)
 	}
@@ -424,15 +391,24 @@ func main() {
 	if err = s.thwackUser(s.nodeConfigs[1], "bob", bobPrivateKey.PublicKey()); err != nil {
 		log.Fatalf("Failed to add user: %v", err)
 	}
-	bobClient, err := s.newMinClient("bob", bobProvider, bobPrivateKey)
+	bobClient, bobOnlineCh, err := s.newMinClient("bob", bobProvider, bobPrivateKey)
 	if err != nil {
 		log.Fatalf("Failed to create bob client: %v", err)
 	}
 	s.servers = append(s.servers, bobClient)
 
-	//	sendMessage(4000, aliceEmail, bobEmail)
-
-	// XXX: Log a bunch of stuff.
+	// Send a test message.
+	_ = bobOnlineCh
+	<-aliceOnlineCh
+	time.Sleep(120 * time.Second)
+	msg := []byte(`Mater mara rigani nertaca
+Uxella uindape in louci riuri
+Briga mara beretor in uaitei tuei
+Uoretes silon tuon con deruolami`)
+	err = sendUnreliableMsg(aliceClient, alicePrivateKey, "bob", bobProvider, bobPrivateKey.PublicKey(), msg)
+	if err != nil {
+		log.Printf("Failed to send unreliable message: %v", err)
+	}
 
 	// Wait for a signal to tear it all down.
 	ch := make(chan os.Signal)
