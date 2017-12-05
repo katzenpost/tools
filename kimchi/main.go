@@ -40,8 +40,10 @@ import (
 	"github.com/katzenpost/core/epochtime"
 	cLog "github.com/katzenpost/core/log"
 	"github.com/katzenpost/core/pki"
+	"github.com/katzenpost/core/sphinx"
 	"github.com/katzenpost/core/sphinx/constants"
 	"github.com/katzenpost/core/thwack"
+	"github.com/katzenpost/core/utils"
 	"github.com/katzenpost/minclient"
 	"github.com/katzenpost/minclient/block"
 	nServer "github.com/katzenpost/server"
@@ -61,6 +63,8 @@ var tailConfig = tail.Config{
 	Follow: true,
 	Logger: tail.DiscardingLogger,
 }
+
+var surbKeys = make(map[[constants.SURBIDLength]byte][]byte)
 
 type kimchi struct {
 	sync.Mutex
@@ -225,6 +229,27 @@ func (s *kimchi) newMinClient(user, provider string, privateKey *ecdh.PrivateKey
 			return nil
 		},
 		OnACKFn: func(id *[constants.SURBIDLength]byte, b []byte) error {
+			lm.Noticef("Received SURB-ACK: %v", len(b))
+			lm.Noticef("SURB-ID: %v", hex.EncodeToString(id[:]))
+
+			// surbKeys should have a lock in production code, but lazy.
+			k, ok := surbKeys[*id]
+			if !ok {
+				lm.Errorf("Failed to find SURB SPRP key")
+				return nil
+			}
+
+			payload, err := sphinx.DecryptSURBPayload(b, k)
+			if err != nil {
+				lm.Errorf("Failed to decrypt SURB: %v", err)
+				return nil
+			}
+			if utils.CtIsZero(payload) {
+				lm.Noticef("SURB Payload: %v bytes of 0x00", len(payload))
+			} else {
+				lm.Noticef("SURB Payload: %v", hex.Dump(payload))
+			}
+
 			return nil
 		},
 	}
@@ -284,6 +309,7 @@ func (s *kimchi) logTailer(prefix, path string) {
 
 func sendUnreliableMsg(client *minclient.Client, senderPrivKey *ecdh.PrivateKey, recipient, provider string, recipientPubKey *ecdh.PublicKey, msg []byte) error {
 	var msgID [block.MessageIDLength]byte
+	rand.Reader.Read(msgID[:])
 
 	blocks, err := block.EncryptMessage(&msgID, msg, senderPrivKey, recipientPubKey)
 	if err != nil {
@@ -291,6 +317,27 @@ func sendUnreliableMsg(client *minclient.Client, senderPrivKey *ecdh.PrivateKey,
 	}
 
 	return client.SendUnreliableCiphertext(recipient, provider, blocks[0])
+}
+
+func sendReliableMsg(client *minclient.Client, senderPrivKey *ecdh.PrivateKey, recipient, provider string, recipientPubKey *ecdh.PublicKey, msg []byte) error {
+	var msgID [block.MessageIDLength]byte
+	rand.Reader.Read(msgID[:])
+
+	var surbID [constants.SURBIDLength]byte
+	rand.Reader.Read(surbID[:])
+
+	blocks, err := block.EncryptMessage(&msgID, msg, senderPrivKey, recipientPubKey)
+	if err != nil {
+		return err
+	}
+
+	k, rtt, err := client.SendCiphertext(recipient, provider, &surbID, blocks[0])
+	log.Printf("SendCiphertext: k: %v, rtt: %v, err: %v", hex.EncodeToString(k), rtt, err)
+	if err == nil {
+		// Should probably lock, but whatever, I'm lazy.
+		surbKeys[surbID] = k
+	}
+	return err
 }
 
 func main() {
@@ -397,10 +444,14 @@ func main() {
 	}
 	s.servers = append(s.servers, bobClient)
 
-	// Send a test message.
+	// Wait for alice and bob to connect, and for the network to fully
+	// bootstrap.  The client being connected isn't an indication that the
+	// network is up, unfortunately.
 	_ = bobOnlineCh
 	<-aliceOnlineCh
 	time.Sleep(120 * time.Second)
+
+	// Send a test unreliable message.
 	msg := []byte(`Mater mara rigani nertaca
 Uxella uindape in louci riuri
 Briga mara beretor in uaitei tuei
@@ -408,6 +459,17 @@ Uoretes silon tuon con deruolami`)
 	err = sendUnreliableMsg(aliceClient, alicePrivateKey, "bob", bobProvider, bobPrivateKey.PublicKey(), msg)
 	if err != nil {
 		log.Printf("Failed to send unreliable message: %v", err)
+	}
+
+	// Send a test reliable message.
+	msg = []byte(`We have arrived, and it is now that we fulfill our charge.
+In fealty to the God-Emperor (our Undying Lord), and by the grace of the Golden Throne, I declare exterminatus upon the Imperial world of Typhon Primaris.
+I hereby sign the Death Warrant of an entire world, and consign a million souls to oblivion.
+May Imperial justice account in all balance.
+The Emperor protects.`)
+	err = sendReliableMsg(aliceClient, alicePrivateKey, "bob", bobProvider, bobPrivateKey.PublicKey(), msg)
+	if err != nil {
+		log.Printf("Failed to send reliable message: %v", err)
 	}
 
 	// Wait for a signal to tear it all down.
