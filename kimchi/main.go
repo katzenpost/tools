@@ -219,7 +219,7 @@ func main() {
 
 	now, elapsed, till := epochtime.Now()
 	log.Printf("Epoch: %v (Elapsed: %v, Till: %v)", now, elapsed, till)
-	if till < 3600 * time.Second {
+	if till < 3600*time.Second {
 		log.Printf("WARNING: Descriptor publication for the next epoch will FAIL.")
 	}
 
