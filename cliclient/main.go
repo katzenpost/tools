@@ -40,6 +40,7 @@ var surbKeys = make(map[[constants.SURBIDLength]byte][]byte)
 type FakeUserKeyDiscovery struct{}
 
 func (d *FakeUserKeyDiscovery) Get(identity string) (*ecdh.PublicKey, error) {
+	fmt.Println("FakeUserKeyDiscovery Get")
 	if identity == "alice@idefix" {
 		bobsKey := new(ecdh.PublicKey)
 		//bobsKey.FromString("")
@@ -62,7 +63,7 @@ func (d *FakeUserKeyDiscovery) Get(identity string) (*ecdh.PublicKey, error) {
 		bobsKey.FromBytes(raw[:])
 		return bobsKey, nil
 	}
-	return nil, nil
+	return nil, fmt.Errorf("failure FakeUserKeyDiscovery: user %s not found", identity)
 }
 
 type PrintMessageConsumer struct{}
@@ -152,10 +153,11 @@ func main() {
 	clientCfg := client.Config{
 		LogBackend: clientLog,
 		PKIClient:  pkiClient,
+		Name:       "cliclient",
 	}
 	mixClient, err := client.New(&clientCfg)
 	if err != nil {
-		fmt.Fprint(os.Stderr, "Failed to create client")
+		fmt.Fprintf(os.Stderr, "1Failed to create client: %s\n", err)
 		os.Exit(-1)
 	}
 
@@ -186,11 +188,13 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Failed to create new session: %v\n", err)
 		os.Exit(-1)
 	}
-	err = session.SendUnreliable(cfg.Account.Name, cfg.Account.Provider, []byte(*message))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to send message: %v\n", err)
-		os.Exit(-1)
-	}
+
+	fmt.Printf("session %v message %v\n", session, message)
+	// err = session.SendUnreliable(cfg.Account.Name, cfg.Account.Provider, []byte(*message))
+	// if err != nil {
+	// 	fmt.Fprintf(os.Stderr, "Failed to send message: %v\n", err)
+	// 	os.Exit(-1)
+	// }
 
 	fmt.Printf("\ncontrol-C to quit\n")
 
