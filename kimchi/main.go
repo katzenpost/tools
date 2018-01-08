@@ -1,5 +1,5 @@
 // kimchi.go - Katzenpost self contained test network.
-// Copyright (C) 2017  Yawning Angel.
+// Copyright (C) 2017  Yawning Angel, David Stainton.
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Affero General Public License as
@@ -22,6 +22,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"net/textproto"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -32,9 +33,13 @@ import (
 	"github.com/hpcloud/tail"
 	aServer "github.com/katzenpost/authority/nonvoting/server"
 	aConfig "github.com/katzenpost/authority/nonvoting/server/config"
+	"github.com/katzenpost/core/crypto/ecdh"
 	"github.com/katzenpost/core/crypto/eddsa"
 	"github.com/katzenpost/core/crypto/rand"
 	"github.com/katzenpost/core/epochtime"
+	"github.com/katzenpost/core/thwack"
+	"github.com/katzenpost/mailproxy"
+	pConfig "github.com/katzenpost/mailproxy/config"
 	nServer "github.com/katzenpost/server"
 	sConfig "github.com/katzenpost/server/config"
 )
@@ -68,6 +73,8 @@ type kimchi struct {
 	lastPort    uint16
 	nodeIdx     int
 	providerIdx int
+
+	recipients map[string]*ecdh.PublicKey
 
 	servers []server
 	tails   []*tail.Tail
@@ -103,7 +110,7 @@ func (s *kimchi) genNodeConfig(isProvider bool) error {
 
 	// Server section.
 	cfg.Server = new(sConfig.Server)
-	cfg.Server.Identifier = fmt.Sprintf("%s.example.org", n)
+	cfg.Server.Identifier = fmt.Sprintf("%s.eXaMpLe.org", n)
 	cfg.Server.Addresses = []string{fmt.Sprintf("127.0.0.1:%d", s.lastPort)}
 	cfg.Server.DataDir = filepath.Join(s.baseDir, n)
 	cfg.Server.IsProvider = isProvider
@@ -177,6 +184,96 @@ func (s *kimchi) genAuthConfig() error {
 	return nil
 }
 
+func (s *kimchi) newMailProxy(user, provider string, privateKey *ecdh.PrivateKey) (*mailproxy.Proxy, error) {
+	const (
+		proxyLogFile = "katzenpost.log"
+		authID       = "testAuth"
+	)
+
+	cfg := new(pConfig.Config)
+
+	dispName := fmt.Sprintf("mailproxy-%v@%v", user, provider)
+
+	// Proxy section.
+	cfg.Proxy = new(pConfig.Proxy)
+	cfg.Proxy.POP3Address = fmt.Sprintf("127.0.0.1:%d", s.lastPort)
+	s.lastPort++
+	cfg.Proxy.SMTPAddress = fmt.Sprintf("127.0.0.1:%d", s.lastPort)
+	s.lastPort++
+	cfg.Proxy.DataDir = filepath.Join(s.baseDir, dispName)
+
+	// Logging section.
+	cfg.Logging = new(pConfig.Logging)
+	cfg.Logging.File = proxyLogFile
+	cfg.Logging.Level = "DEBUG"
+
+	// Management section.
+	cfg.Management = new(pConfig.Management)
+	cfg.Management.Enable = true
+
+	// Authority section.
+	cfg.NonvotingAuthority = make(map[string]*pConfig.NonvotingAuthority)
+	auth := new(pConfig.NonvotingAuthority)
+	auth.Address = fmt.Sprintf("127.0.0.1:%d", basePort)
+	auth.PublicKey = s.authIdentity.PublicKey()
+	cfg.NonvotingAuthority[authID] = auth
+
+	// Account section.
+	acc := new(pConfig.Account)
+	acc.User = user
+	acc.Provider = provider
+	acc.Authority = authID
+	acc.SetForcedLinkKey(privateKey)
+	acc.SetForcedIdentityKey(privateKey)
+	cfg.Account = append(cfg.Account, acc)
+
+	// Recipients section.
+	cfg.Recipients = s.recipients
+
+	if err := cfg.FixupAndValidate(); err != nil {
+		return nil, err
+	}
+
+	p, err := mailproxy.New(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	go s.logTailer(dispName, filepath.Join(cfg.Proxy.DataDir, proxyLogFile))
+
+	return p, nil
+}
+
+func (s *kimchi) thwackUser(provider *sConfig.Config, user string, pubKey *ecdh.PublicKey) error {
+	log.Printf("Attempting to add user: %v@%v", user, provider.Server.Identifier)
+
+	sockFn := filepath.Join(provider.Server.DataDir, "management_sock")
+	c, err := textproto.Dial("unix", sockFn)
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+
+	if _, _, err = c.ReadResponse(int(thwack.StatusServiceReady)); err != nil {
+		return err
+	}
+
+	if err = c.PrintfLine("ADD_USER %v %v", user, pubKey); err != nil {
+		return err
+	}
+	if _, _, err = c.ReadResponse(int(thwack.StatusOk)); err != nil {
+		return err
+	}
+	if err = c.PrintfLine("QUIT"); err != nil {
+		return err
+	}
+	if _, _, err = c.ReadResponse(int(thwack.StatusOk)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (s *kimchi) logTailer(prefix, path string) {
 	s.Add(1)
 	defer s.Done()
@@ -200,7 +297,10 @@ func (s *kimchi) logTailer(prefix, path string) {
 func main() {
 	var err error
 
-	s := &kimchi{lastPort: basePort + 1}
+	s := &kimchi{
+		lastPort:   basePort + 1,
+		recipients: make(map[string]*ecdh.PublicKey),
+	}
 
 	// TODO: Someone that cares enough can use a config file for this, but
 	// this is ultimately just for testing.
@@ -219,7 +319,7 @@ func main() {
 
 	now, elapsed, till := epochtime.Now()
 	log.Printf("Epoch: %v (Elapsed: %v, Till: %v)", now, elapsed, till)
-	if till < 3600*time.Second {
+	if till < epochtime.Period-(3600*time.Second) {
 		log.Printf("WARNING: Descriptor publication for the next epoch will FAIL.")
 	}
 
@@ -265,9 +365,34 @@ func main() {
 		go s.logTailer(v.Server.Identifier, filepath.Join(v.Server.DataDir, v.Logging.File))
 	}
 
-	// XXX: Thwack the users.
+	// Generate the private keys used by the clients in advance so they
+	// can know each other.
+	alicePrivateKey, _ := ecdh.NewKeypair(rand.Reader)
+	bobPrivateKey, _ := ecdh.NewKeypair(rand.Reader)
+	s.recipients["alice@provider-0.example.org"] = alicePrivateKey.PublicKey()
+	s.recipients["bob@provider-1.example.org"] = bobPrivateKey.PublicKey()
 
-	// XXX: Log a bunch of stuff.
+	// Initialize Alice's mailproxy.
+	aliceProvider := s.authProviders[0].Identifier
+	if err = s.thwackUser(s.nodeConfigs[0], "aLiCe", alicePrivateKey.PublicKey()); err != nil {
+		log.Fatalf("Failed to add user: %v", err)
+	}
+	aliceProxy, err := s.newMailProxy("alice", aliceProvider, alicePrivateKey)
+	if err != nil {
+		log.Fatalf("Failed to create alice client: %v", err)
+	}
+	s.servers = append(s.servers, aliceProxy)
+
+	// Initialize Bob's mailproxy.
+	bobProvider := s.authProviders[1].Identifier
+	if err = s.thwackUser(s.nodeConfigs[1], "BoB", bobPrivateKey.PublicKey()); err != nil {
+		log.Fatalf("Failed to add user: %v", err)
+	}
+	bobProxy, err := s.newMailProxy("bob", bobProvider, bobPrivateKey)
+	if err != nil {
+		log.Fatalf("Failed to create bob client: %v", err)
+	}
+	s.servers = append(s.servers, bobProxy)
 
 	// Wait for a signal to tear it all down.
 	ch := make(chan os.Signal)
