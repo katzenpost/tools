@@ -17,7 +17,6 @@
 package main
 
 import (
-	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -133,7 +132,7 @@ func (s *kimchi) genNodeConfig(isProvider bool) error {
 	if err != nil {
 		return err
 	}
-	cfg.Debug.ForceIdentityKey = hex.EncodeToString(identity.Bytes())
+	cfg.Debug.IdentityKey = identity
 
 	aNode := new(aConfig.Node)
 	aNode.IdentityKey = identity.PublicKey()
@@ -175,7 +174,7 @@ func (s *kimchi) genAuthConfig() error {
 
 	// Debug section.
 	cfg.Debug = new(aConfig.Debug)
-	cfg.Debug.ForceIdentityKey = hex.EncodeToString(s.authIdentity.Bytes())
+	cfg.Debug.IdentityKey = s.authIdentity
 
 	if err := cfg.FixupAndValidate(); err != nil {
 		return err
