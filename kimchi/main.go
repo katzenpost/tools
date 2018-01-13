@@ -223,8 +223,8 @@ func (s *kimchi) newMailProxy(user, provider string, privateKey *ecdh.PrivateKey
 	acc.User = user
 	acc.Provider = provider
 	acc.Authority = authID
-	acc.SetForcedLinkKey(privateKey)
-	acc.SetForcedIdentityKey(privateKey)
+	acc.LinkKey = privateKey
+	acc.IdentityKey = privateKey
 	cfg.Account = append(cfg.Account, acc)
 
 	// Recipients section.
