@@ -17,6 +17,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -295,6 +296,8 @@ func (s *kimchi) logTailer(prefix, path string) {
 
 func main() {
 	var err error
+	sendMessage := flag.Bool("s", false, "Cause Alice to send a message to Bob.")
+	flag.Parse()
 
 	s := &kimchi{
 		lastPort:   basePort + 1,
@@ -392,6 +395,22 @@ func main() {
 		log.Fatalf("Failed to create bob client: %v", err)
 	}
 	s.servers = append(s.servers, bobProxy)
+
+	// if we received a commandline option specifying that
+	// Alice should send Bob a message...
+	if *sendMessage {
+		testMessage := `MIME-Version: 1.0
+Date: Mon, 16 Jan 2018 17:05:31 +0100
+Subject: hi
+From: Alice <alice@provider-0.example.org>
+To: Bob <bob@provider-1.example.org>
+Content-Type: text/plain; charset="UTF-8"
+
+hello Bob.
+write me back sometime.
+`
+		aliceProxy.SendMessage("alice@provider-0.example.org", "bob@provider-1.example.org", []byte(testMessage))
+	}
 
 	// Wait for a signal to tear it all down.
 	ch := make(chan os.Signal)
