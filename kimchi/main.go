@@ -410,6 +410,7 @@ hello Bob.
 write me back sometime.
 `
 		aliceProxy.SendMessage("alice@provider-0.example.org", "bob@provider-1.example.org", []byte(testMessage))
+		log.Printf("Alice sent to Bob: \n%s", testMessage)
 	}
 
 	// Wait for a signal to tear it all down.
