@@ -73,7 +73,7 @@ type kimchi struct {
 	nodeIdx     int
 	providerIdx int
 
-	recipients map[string]*ecdh.PublicKey
+	recipients map[string]string
 
 	servers []server
 	tails   []*tail.Tail
@@ -144,6 +144,26 @@ func (s *kimchi) genNodeConfig(isProvider bool) error {
 		aNode.Identifier = cfg.Server.Identifier
 		s.authProviders = append(s.authProviders, aNode)
 		s.providerIdx++
+
+		cfg.Provider = new(sConfig.Provider)
+		cfg.Provider.AltAddresses = map[string][]string{
+			"TCP":   []string{fmt.Sprintf("localhost:%d", s.lastPort)},
+			"torv2": []string{"onedaythiswillbea.onion:2323"},
+		}
+
+		/*
+			if s.providerIdx == 1 {
+				cfg.Debug.NumProviderWorkers = 10
+				cfg.Provider.SQLDB = new(sConfig.SQLDB)
+				cfg.Provider.SQLDB.Backend = "pgx"
+				cfg.Provider.SQLDB.DataSourceName = "host=localhost port=5432 database=katzenpost sslmode=disable"
+				cfg.Provider.UserDB = new(sConfig.UserDB)
+				cfg.Provider.UserDB.Backend = sConfig.BackendSQL
+
+				cfg.Provider.SpoolDB = new(sConfig.SpoolDB)
+				cfg.Provider.SpoolDB.Backend = sConfig.BackendSQL
+			}
+		*/
 	} else {
 		s.authNodes = append(s.authNodes, aNode)
 		s.nodeIdx++
@@ -226,6 +246,16 @@ func (s *kimchi) newMailProxy(user, provider string, privateKey *ecdh.PrivateKey
 	acc.IdentityKey = privateKey
 	cfg.Account = append(cfg.Account, acc)
 
+	// UpstreamProxy section.
+	/*
+		cfg.UpstreamProxy = new(pConfig.UpstreamProxy)
+		cfg.UpstreamProxy.Type = "tor+socks5"
+		// cfg.UpstreamProxy.Network = "unix"
+		// cfg.UpstreamProxy.Address = "/tmp/socks.socket"
+		cfg.UpstreamProxy.Network = "tcp"
+		cfg.UpstreamProxy.Address = "127.0.0.1:1080"
+	*/
+
 	// Recipients section.
 	cfg.Recipients = s.recipients
 
@@ -298,7 +328,7 @@ func main() {
 
 	s := &kimchi{
 		lastPort:   basePort + 1,
-		recipients: make(map[string]*ecdh.PublicKey),
+		recipients: make(map[string]string),
 	}
 
 	// TODO: Someone that cares enough can use a config file for this, but
@@ -368,8 +398,8 @@ func main() {
 	// can know each other.
 	alicePrivateKey, _ := ecdh.NewKeypair(rand.Reader)
 	bobPrivateKey, _ := ecdh.NewKeypair(rand.Reader)
-	s.recipients["alice@provider-0.example.org"] = alicePrivateKey.PublicKey()
-	s.recipients["bob@provider-1.example.org"] = bobPrivateKey.PublicKey()
+	s.recipients["alice@provider-0.example.org"] = alicePrivateKey.PublicKey().String()
+	s.recipients["bob@provider-1.example.org"] = bobPrivateKey.PublicKey().String()
 
 	// Initialize Alice's mailproxy.
 	aliceProvider := s.authProviders[0].Identifier
