@@ -245,6 +245,24 @@ func main() {
 		},
 	})
 
+	// register a function for "pull" command.
+	shell.AddCmd(&ishell.Cmd{
+		Name: "pull",
+		Help: "drain message queue",
+		Func: func(c *ishell.Context) {
+			if currIdent != "" {
+				for {
+					msg, err := proxy.ReceivePop(currIdent)
+					if err != nil {
+						break
+					}
+					c.Print(showHeader(msg))
+					c.Printf("%s", msg.Payload)
+				}
+			}
+		},
+	})
+
 	// Let ishell do signal handling.
 	shell.Interrupt(func(c *ishell.Context, count int, input string) { proxy.Shutdown(); shell.Close() })
 	shell.Run()
