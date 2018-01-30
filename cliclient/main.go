@@ -103,28 +103,61 @@ func main() {
 		Name: "providers",
 		Help: "list provider connections",
 		Func: func(c *ishell.Context) {
-			// test the IsConnected method
 			for identity, _ := range cfg.Recipients {
-				if proxy.IsConnected(identity) {
-					shell.AddCmd(&ishell.Cmd{
-						Name: identity,
-						Help: fmt.Sprintf("use %s", identity),
-						Func: func(c *ishell.Context) {
-							currIdent = identity
-						},
-					})
-					fmt.Printf("%v connected\n", identity)
-				} else {
-					// adds a tab-completion entry that doesn't do anything by itself
-					// XXX could have subcommands attached.
-					shell.AddCmd(&ishell.Cmd{
-						Name: identity,
-						Help: fmt.Sprintf("use %s", identity),
-						Func: func(c *ishell.Context) {},
-					})
-
-					fmt.Printf("%v disconnected\n", identity)
+				c := ishell.Cmd{
+					Name: identity,
+					Help: fmt.Sprintf("use %s", identity),
+					Func: func(c *ishell.Context) {
+						currIdent = identity
+					},
 				}
+				c.AddCmd(&ishell.Cmd{
+					Name: "identity",
+					Help: "recipient identity",
+					Func: func(c *ishell.Context) {
+						c.Print("Identity: ")
+						recipientKey, err := proxy.GetRecipient(identity)
+						if err != nil {
+							fmt.Fprintf(os.Stderr, "GetRecipient failed: %v\n", err)
+							os.Exit(-1)
+						}
+						c.Println(recipientKey)
+					},
+				})
+
+				c.AddCmd(&ishell.Cmd{
+					Name: "send",
+					Help: "send message",
+					Func: func(c *ishell.Context) {
+						fromIdentity := ""
+						if currIdent != "" {
+							fromIdentity = currIdent
+						} else {
+							c.Print("From: ")
+							fromIdentity = c.ReadLine()
+						}
+						toIdentity := identity
+						c.Print("Subject: ")
+						msgSubject := c.ReadLine()
+						c.Print("Message: (ctrl-D to end)\n")
+						msgBody := c.ReadMultiLines("\n.\n")
+						// XXX sanitize time
+						date := "Mon, 42 Jan 4242 42:42:42 +0100"
+						testMessage :=
+						fmt.Sprintf(messageTemplate,
+						date, msgSubject, fromIdentity,
+						toIdentity, msgBody)
+						err = proxy.SendMessage(fromIdentity, toIdentity, []byte(testMessage))
+						if err != nil {
+							fmt.Fprintf(os.Stderr, "SendMessage failed: %v\n", err)
+							os.Exit(-1)
+						}
+					},
+				})
+
+				shell.AddCmd(&c)
+
+				fmt.Printf("%v disconnected\n", identity)
 			}
 		},
 	})
