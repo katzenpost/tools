@@ -121,7 +121,8 @@ func main() {
 		Help: "receive peek",
 		Func: func(c *ishell.Context) {
 			// test ReceivePeek method.
-			msg, err := proxy.ReceivePeek("blackhole@ramix")
+			// XXX tab-complete the account name to query
+			msg, err := proxy.ReceivePeek("xxx")
 			if err == nil {
 				c.Print(showHeader(msg))
 				c.Printf("%s\n", msg.Payload)
@@ -137,7 +138,8 @@ func main() {
 		Help: "receive pop",
 		Func: func(c *ishell.Context) {
 			// test ReceivePop method.
-			msg, err := proxy.ReceivePop("blackhole@ramix")
+			// XXX tab-complete the account name to query
+			msg, err := proxy.ReceivePop("xxx")
 			if err == nil {
 				c.Print(showHeader(msg))
 				c.Printf("%s\n", msg.Payload)
