@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"github.com/abiosoft/ishell"
 	"os"
-	"os/signal"
 	"syscall"
 
 	"github.com/katzenpost/core/crypto/ecdh"
@@ -64,7 +63,6 @@ func main() {
 		fmt.Printf("Failed to spawn server instance: %v\n", err)
 		os.Exit(-1)
 	}
-	defer proxy.Shutdown()
 
 	shell := ishell.New()
 	shell.Println("KatzenShell")
@@ -208,15 +206,7 @@ func main() {
 		},
 	})
 
-	// run shell
+	// Let ishell do signal handling.
+	shell.Interrupt(func(c *ishell.Context, count int, input string) { proxy.Shutdown(); shell.Close() })
 	shell.Run()
-
-	// Setup the signal handling.
-	ch := make(chan os.Signal)
-	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
-
-	// Halt the proxy gracefully on SIGINT/SIGTERM.
-	<-ch
-	fmt.Printf("Terminated.")
-
 }
