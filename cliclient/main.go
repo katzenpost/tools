@@ -65,6 +65,7 @@ func main() {
 	}
 
 	shell := ishell.New()
+	var currIdent string = ""
 	shell.Println("KatzenShell")
 
 	// register a function for "get recipient" command.
@@ -105,8 +106,23 @@ func main() {
 			// test the IsConnected method
 			for identity, _ := range cfg.Recipients {
 				if proxy.IsConnected(identity) {
+					shell.AddCmd(&ishell.Cmd{
+						Name: identity,
+						Help: fmt.Sprintf("use %s", identity),
+						Func: func(c *ishell.Context) {
+							currIdent = identity
+						},
+					})
 					fmt.Printf("%v connected\n", identity)
 				} else {
+					// adds a tab-completion entry that doesn't do anything by itself
+					// XXX could have subcommands attached.
+					shell.AddCmd(&ishell.Cmd{
+						Name: identity,
+						Help: fmt.Sprintf("use %s", identity),
+						Func: func(c *ishell.Context) {},
+					})
+
 					fmt.Printf("%v disconnected\n", identity)
 				}
 			}
@@ -119,8 +135,7 @@ func main() {
 		Help: "receive peek",
 		Func: func(c *ishell.Context) {
 			// test ReceivePeek method.
-			// XXX tab-complete the account name to query
-			msg, err := proxy.ReceivePeek("xxx")
+			msg, err := proxy.ReceivePeek(currIdent)
 			if err == nil {
 				c.Print(showHeader(msg))
 				c.Printf("%s\n", msg.Payload)
@@ -136,8 +151,7 @@ func main() {
 		Help: "receive pop",
 		Func: func(c *ishell.Context) {
 			// test ReceivePop method.
-			// XXX tab-complete the account name to query
-			msg, err := proxy.ReceivePop("xxx")
+			msg, err := proxy.ReceivePop(currIdent)
 			if err == nil {
 				c.Print(showHeader(msg))
 				c.Printf("%s\n", msg.Payload)
@@ -187,15 +201,20 @@ func main() {
 		Name: "send",
 		Help: "send message",
 		Func: func(c *ishell.Context) {
-			// TODO add tab completion for recipient(s)
-			c.Print("From: ")
-			fromIdentity := c.ReadLine()
+			fromIdentity := ""
+			if currIdent != "" {
+				fromIdentity = currIdent
+			} else {
+				c.Print("From: ")
+				fromIdentity = c.ReadLine()
+			}
 			c.Print("To: ")
 			toIdentity := c.ReadLine()
 			c.Print("Subject: ")
 			msgSubject := c.ReadLine()
-			c.Print("Message: ")
-			msgBody := c.ReadLine()
+			c.Print("Message: (ctrl-D to end)\n")
+			msgBody := c.ReadMultiLines("\n.\n")
+			// XXX sanitize time
 			date := "Mon, 42 Jan 4242 42:42:42 +0100"
 			testMessage := fmt.Sprintf(messageTemplate, date, msgSubject, fromIdentity, toIdentity, msgBody)
 			err = proxy.SendMessage(fromIdentity, toIdentity, []byte(testMessage))
