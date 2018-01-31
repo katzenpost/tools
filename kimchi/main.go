@@ -73,7 +73,7 @@ type kimchi struct {
 	nodeIdx     int
 	providerIdx int
 
-	recipients map[string]string
+	recipients map[string]*ecdh.PublicKey
 
 	servers []server
 	tails   []*tail.Tail
@@ -328,7 +328,7 @@ func main() {
 
 	s := &kimchi{
 		lastPort:   basePort + 1,
-		recipients: make(map[string]string),
+		recipients: make(map[string]*ecdh.PublicKey),
 	}
 
 	// TODO: Someone that cares enough can use a config file for this, but
@@ -398,8 +398,8 @@ func main() {
 	// can know each other.
 	alicePrivateKey, _ := ecdh.NewKeypair(rand.Reader)
 	bobPrivateKey, _ := ecdh.NewKeypair(rand.Reader)
-	s.recipients["alice@provider-0.example.org"] = alicePrivateKey.PublicKey().String()
-	s.recipients["bob@provider-1.example.org"] = bobPrivateKey.PublicKey().String()
+	s.recipients["alice@provider-0.example.org"] = alicePrivateKey.PublicKey()
+	s.recipients["bob@provider-1.example.org"] = bobPrivateKey.PublicKey()
 
 	// Initialize Alice's mailproxy.
 	aliceProvider := s.authProviders[0].Identifier
