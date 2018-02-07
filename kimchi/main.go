@@ -39,6 +39,7 @@ import (
 	"github.com/katzenpost/core/thwack"
 	"github.com/katzenpost/mailproxy"
 	pConfig "github.com/katzenpost/mailproxy/config"
+	"github.com/katzenpost/mailproxy/event"
 	nServer "github.com/katzenpost/server"
 	sConfig "github.com/katzenpost/server/config"
 )
@@ -151,6 +152,16 @@ func (s *kimchi) genNodeConfig(isProvider bool) error {
 			"torv2": []string{"onedaythiswillbea.onion:2323"},
 		}
 
+		loopCfg := new(sConfig.Kaetzchen)
+		loopCfg.Capability = "loop"
+		loopCfg.Endpoint = "+loop"
+		cfg.Provider.Kaetzchen = append(cfg.Provider.Kaetzchen, loopCfg)
+
+		keysvrCfg := new(sConfig.Kaetzchen)
+		keysvrCfg.Capability = "keyserver"
+		keysvrCfg.Endpoint = "+keyserver"
+		cfg.Provider.Kaetzchen = append(cfg.Provider.Kaetzchen, keysvrCfg)
+
 		/*
 			if s.providerIdx == 1 {
 				cfg.Debug.NumProviderWorkers = 10
@@ -220,6 +231,7 @@ func (s *kimchi) newMailProxy(user, provider string, privateKey *ecdh.PrivateKey
 	cfg.Proxy.SMTPAddress = fmt.Sprintf("127.0.0.1:%d", s.lastPort)
 	s.lastPort++
 	cfg.Proxy.DataDir = filepath.Join(s.baseDir, dispName)
+	cfg.Proxy.EventSink = make(chan event.Event)
 
 	// Logging section.
 	cfg.Logging = new(pConfig.Logging)
@@ -244,6 +256,7 @@ func (s *kimchi) newMailProxy(user, provider string, privateKey *ecdh.PrivateKey
 	acc.Authority = authID
 	acc.LinkKey = privateKey
 	acc.IdentityKey = privateKey
+	// acc.StorageKey = privateKey
 	cfg.Account = append(cfg.Account, acc)
 
 	// UpstreamProxy section.
@@ -268,6 +281,22 @@ func (s *kimchi) newMailProxy(user, provider string, privateKey *ecdh.PrivateKey
 		return nil, err
 	}
 
+	go func() {
+		for ev := range cfg.Proxy.EventSink {
+			log.Printf("%v: Event: %+v", dispName, ev)
+			switch e := ev.(type) {
+			case *event.KaetzchenReplyEvent:
+				// Just assume this is a keyserver query for now.
+				if u, k, err := p.ParseKeyQueryResponse(e.Payload); err != nil {
+					log.Printf("%v: Keyserver query failed: %v", dispName, err)
+				} else {
+					log.Printf("%v: Keyserver reply: %v -> %v", dispName, u, k)
+				}
+			default:
+			}
+		}
+	}()
+
 	go s.logTailer(dispName, filepath.Join(cfg.Proxy.DataDir, proxyLogFile))
 
 	return p, nil
@@ -287,17 +316,17 @@ func (s *kimchi) thwackUser(provider *sConfig.Config, user string, pubKey *ecdh.
 		return err
 	}
 
-	if err = c.PrintfLine("ADD_USER %v %v", user, pubKey); err != nil {
-		return err
-	}
-	if _, _, err = c.ReadResponse(int(thwack.StatusOk)); err != nil {
-		return err
-	}
-	if err = c.PrintfLine("QUIT"); err != nil {
-		return err
-	}
-	if _, _, err = c.ReadResponse(int(thwack.StatusOk)); err != nil {
-		return err
+	for _, v := range []string{
+		fmt.Sprintf("ADD_USER %v %v", user, pubKey),
+		fmt.Sprintf("SET_USER_IDENTITY %v %v", user, pubKey),
+		"QUIT",
+	} {
+		if err = c.PrintfLine("%v", v); err != nil {
+			return err
+		}
+		if _, _, err = c.ReadResponse(int(thwack.StatusOk)); err != nil {
+			return err
+		}
 	}
 
 	return nil
