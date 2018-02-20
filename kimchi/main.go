@@ -30,8 +30,8 @@ import (
 	"time"
 
 	"github.com/hpcloud/tail"
-	aServer "github.com/katzenpost/authority/nonvoting/server"
-	aConfig "github.com/katzenpost/authority/nonvoting/server/config"
+	aServer "github.com/katzenpost/authority/voting/server"
+	aConfig "github.com/katzenpost/authority/voting/server/config"
 	"github.com/katzenpost/core/crypto/ecdh"
 	"github.com/katzenpost/core/crypto/eddsa"
 	"github.com/katzenpost/core/crypto/rand"
@@ -173,34 +173,29 @@ func (s *kimchi) genNodeConfig(isProvider bool) error {
 	return cfg.FixupAndValidate()
 }
 
-func (s *kimchi) genAuthConfig() error {
-	const authLogFile = "authority.log"
+func (s *kimchi) genAuthorities(peers []*pConfig.Authorities) ([]*aServer.Server, error) {
+	for index, peer := range peers {
+		authLogFile := fmt.Sprintf("authority%d.log", index)
+		cfg := new(aConfig.Config)
+		cfg.Authority = authority
+		cfg.Authorities = peers
+		cfg.Logging = new(aConfig.Logging)
+		cfg.Logging.File = authLogFile
+		cfg.Logging.Level = "DEBUG"
+		cfg.Mixes = s.authNodes
+		cfg.Providers = s.authProviders
+		cfg.Debug = new(aConfig.Debug)
+		cfg.Debug.IdentityKey = s.authIdentity
+		if err := cfg.FixupAndValidate(); err != nil {
+			return nil, err
+		}
+		authority, err := aServer.New(cfg)
+		if err != nil {
+			return nil, err
+		}
 
-	cfg := new(aConfig.Config)
-
-	// Authority section.
-	cfg.Authority = new(aConfig.Authority)
-	cfg.Authority.Addresses = []string{fmt.Sprintf("127.0.0.1:%d", basePort)}
-	cfg.Authority.DataDir = filepath.Join(s.baseDir, "authority")
-
-	// Logging section.
-	cfg.Logging = new(aConfig.Logging)
-	cfg.Logging.File = authLogFile
-	cfg.Logging.Level = "DEBUG"
-
-	// The node lists.
-	cfg.Mixes = s.authNodes
-	cfg.Providers = s.authProviders
-
-	// Debug section.
-	cfg.Debug = new(aConfig.Debug)
-	cfg.Debug.IdentityKey = s.authIdentity
-
-	if err := cfg.FixupAndValidate(); err != nil {
-		return err
 	}
-	s.authConfig = cfg
-	return nil
+	return nil, nil // XXX WRONG
 }
 
 func (s *kimchi) newMailProxy(user, provider string, privateKey *ecdh.PrivateKey) (*mailproxy.Proxy, error) {
@@ -231,8 +226,8 @@ func (s *kimchi) newMailProxy(user, provider string, privateKey *ecdh.PrivateKey
 	cfg.Management.Enable = true
 
 	// Authority section.
-	cfg.NonvotingAuthority = make(map[string]*pConfig.NonvotingAuthority)
-	auth := new(pConfig.NonvotingAuthority)
+	cfg.VotingAuthority = make(map[string]*pConfig.VotingAuthority)
+	auth := new(pConfig.VotingAuthority)
 	auth.Address = fmt.Sprintf("127.0.0.1:%d", basePort)
 	auth.PublicKey = s.authIdentity.PublicKey()
 	cfg.NonvotingAuthority[authID] = auth
@@ -352,11 +347,6 @@ func main() {
 		log.Printf("WARNING: Descriptor publication for the next epoch will FAIL.")
 	}
 
-	// Generate the authority identity key.
-	if s.authIdentity, err = eddsa.NewKeypair(rand.Reader); err != nil {
-		log.Fatalf("Failed to generate authority identity key: %v", err)
-	}
-
 	// Generate the provider configs.
 	for i := 0; i < nrProviders; i++ {
 		if err = s.genNodeConfig(true); err != nil {
@@ -372,14 +362,11 @@ func main() {
 	}
 
 	// Generate the authority config, and launch the authority.
-	if err = s.genAuthConfig(); err != nil {
-		log.Fatalf("Failed to generate authority config: %v", err)
-	}
-	var svr server
-	svr, err = aServer.New(s.authConfig)
+	s.authorities, err = genAuthorities()
 	if err != nil {
-		log.Fatalf("Failed to launch authority: %v", err)
+		log.Fatalf("getAuthorities failed: %s", err)
 	}
+
 	s.servers = append(s.servers, svr)
 	go s.logTailer("authority", filepath.Join(s.authConfig.Authority.DataDir, s.authConfig.Logging.File))
 
