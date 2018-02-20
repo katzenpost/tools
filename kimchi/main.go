@@ -173,11 +173,11 @@ func (s *kimchi) genNodeConfig(isProvider bool) error {
 	return cfg.FixupAndValidate()
 }
 
-func (s *kimchi) genAuthorities(peers []*pConfig.Authorities) ([]*aServer.Server, error) {
-	for index, peer := range peers {
+func (s *kimchi) genVotingAuthorities(peers *pConfig.VotingAuthority) ([]*aServer.Server, error) {
+	for index, peer := range peers.Peers {
 		authLogFile := fmt.Sprintf("authority%d.log", index)
 		cfg := new(aConfig.Config)
-		cfg.Authority = authority
+		cfg.Authority = peer
 		cfg.Authorities = peers
 		cfg.Logging = new(aConfig.Logging)
 		cfg.Logging.File = authLogFile
