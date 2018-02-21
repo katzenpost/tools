@@ -44,10 +44,11 @@ import (
 )
 
 const (
-	logFile     = "kimchi.log"
-	basePort    = 30000
-	nrNodes     = 6
-	nrProviders = 2
+	logFile       = "kimchi.log"
+	basePort      = 30000
+	nrNodes       = 6
+	nrProviders   = 2
+	nrAuthorities = 10
 )
 
 var tailConfig = tail.Config{
@@ -173,11 +174,26 @@ func (s *kimchi) genNodeConfig(isProvider bool) error {
 	return cfg.FixupAndValidate()
 }
 
-func (s *kimchi) genVotingAuthorities(peers *pConfig.VotingAuthority) ([]*aServer.Server, error) {
-	for index, peer := range peers.Peers {
-		authLogFile := fmt.Sprintf("authority%d.log", index)
+func (s *kimchi) genVotingAuthorities() ([]*aServer.Server, error) {
+	authorities := make([]*aConfig.AuthorityPeer, nrAuthorities)
+	for i := 0; i < nrAuthorities; i++ {
+		//p := &pConfig.VotingAuthority{Peers: authorities}
+		k, _ := eddsa.NewKeypair(rand.Reader)
+		l, _ := ecdh.NewKeypair(rand.Reader)
+		a := fmt.Sprintf("127.0.0.1:%d", s.lastPort)
+		s.lastPort++
+
+		authorities[i] = &aConfig.AuthorityPeer{IdentityPublicKey: k.PublicKey(),
+			LinkPublicKey: l.PublicKey(), Addresses: []string{a}}
+	}
+
+	aNodes := make([]*aServer.Server, nrAuthorities)
+	for i, peer := range authorities {
+		// exclude this peer from the set of peers
+		peers := append(authorities[:i], authorities[i+1:]...)
+		authLogFile := fmt.Sprintf("authority%d.log", i)
 		cfg := new(aConfig.Config)
-		cfg.Authority = peer
+		cfg.Authority = &aConfig.Authority{Addresses: peer.Addresses}
 		cfg.Authorities = peers
 		cfg.Logging = new(aConfig.Logging)
 		cfg.Logging.File = authLogFile
@@ -193,9 +209,10 @@ func (s *kimchi) genVotingAuthorities(peers *pConfig.VotingAuthority) ([]*aServe
 		if err != nil {
 			return nil, err
 		}
+		aNodes = append(aNodes, authority)
 
 	}
-	return nil, nil // XXX WRONG
+	return aNodes, nil
 }
 
 func (s *kimchi) newMailProxy(user, provider string, privateKey *ecdh.PrivateKey) (*mailproxy.Proxy, error) {
@@ -225,22 +242,29 @@ func (s *kimchi) newMailProxy(user, provider string, privateKey *ecdh.PrivateKey
 	cfg.Management = new(pConfig.Management)
 	cfg.Management.Enable = true
 
-	// Authority section.
-	cfg.VotingAuthority = make(map[string]*pConfig.VotingAuthority)
-	auth := new(pConfig.VotingAuthority)
-	auth.Address = fmt.Sprintf("127.0.0.1:%d", basePort)
-	auth.PublicKey = s.authIdentity.PublicKey()
-	cfg.NonvotingAuthority[authID] = auth
-
 	// Account section.
 	acc := new(pConfig.Account)
 	acc.User = user
 	acc.Provider = provider
-	acc.Authority = authID
 	acc.LinkKey = privateKey
 	acc.IdentityKey = privateKey
 	cfg.Account = append(cfg.Account, acc)
 
+	// NonvotingAuthority section.
+	if cfg.NonvotingAuthority != nil {
+		auth := new(pConfig.NonvotingAuthority)
+		auth.Address = fmt.Sprintf("128.0.0.1:%d", basePort)
+		auth.PublicKey = s.authIdentity.PublicKey()
+		cfg.NonvotingAuthority[authID] = auth
+		acc.NonvotingAuthority = authID
+	}
+	// VotingAuthority section.
+	if cfg.VotingAuthority != nil {
+		auth := new(pConfig.VotingAuthority)
+		cfg.VotingAuthority = make(map[string]*pConfig.VotingAuthority)
+		cfg.VotingAuthority[authID] = auth
+		acc.VotingAuthority = authID
+	}
 	// UpstreamProxy section.
 	/*
 		cfg.UpstreamProxy = new(pConfig.UpstreamProxy)
@@ -362,17 +386,19 @@ func main() {
 	}
 
 	// Generate the authority config, and launch the authority.
-	s.authorities, err = genAuthorities()
+	authorities, err := s.genVotingAuthorities()
+	for _, a := range authorities {
+		s.servers = append(s.servers, a)
+	}
 	if err != nil {
 		log.Fatalf("getAuthorities failed: %s", err)
 	}
 
-	s.servers = append(s.servers, svr)
 	go s.logTailer("authority", filepath.Join(s.authConfig.Authority.DataDir, s.authConfig.Logging.File))
 
 	// Launch all the nodes.
 	for _, v := range s.nodeConfigs {
-		svr, err = nServer.New(v)
+		svr, err := nServer.New(v)
 		if err != nil {
 			log.Fatalf("Failed to launch node: %v", err)
 		}
@@ -415,7 +441,7 @@ func main() {
 	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
 	<-ch
 	log.Printf("Received shutdown request.")
-	for _, svr = range s.servers {
+	for _, svr := range s.servers {
 		svr.Shutdown()
 	}
 	log.Printf("All servers halted.")
