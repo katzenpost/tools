@@ -17,10 +17,13 @@
 package main
 
 import (
+	"bytes"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
+	mrand "math/rand"
 	"net/textproto"
 	"os"
 	"os/signal"
@@ -30,7 +33,7 @@ import (
 	"time"
 
 	"github.com/hpcloud/tail"
-	aServer "github.com/katzenpost/authority/voting/server"
+	//aServer "github.com/katzenpost/authority/voting/server"
 	aConfig "github.com/katzenpost/authority/voting/server/config"
 	"github.com/katzenpost/core/crypto/ecdh"
 	"github.com/katzenpost/core/crypto/eddsa"
@@ -64,10 +67,7 @@ type kimchi struct {
 	baseDir   string
 	logWriter io.Writer
 
-	authConfig    *aConfig.Config
-	authIdentity  *eddsa.PrivateKey
-	authNodes     []*aConfig.Node
-	authProviders []*aConfig.Node
+	votingAuthConfigs []*aConfig.Config
 
 	nodeConfigs []*sConfig.Config
 	lastPort    uint16
@@ -85,6 +85,16 @@ type server interface {
 	Wait()
 }
 
+func newKimchi(basePort int) *kimchi {
+	//[]*sConfig.Config
+	k := &kimchi{
+		lastPort:    uint16(basePort + 1),
+		recipients:  make(map[string]*ecdh.PublicKey),
+		nodeConfigs: make([]*sConfig.Config, 0),
+	}
+	return k
+}
+
 func (s *kimchi) initLogging() error {
 	logFilePath := filepath.Join(s.baseDir, logFile)
 	f, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
@@ -99,7 +109,59 @@ func (s *kimchi) initLogging() error {
 	return nil
 }
 
-func (s *kimchi) genNodeConfig(isProvider bool) error {
+func (s *kimchi) genVotingAuthoritiesCfg(numAuthorities int) error {
+	parameters := &aConfig.Parameters{
+		MixLambda:       1,
+		MixMaxDelay:     10000,
+		SendLambda:      123,
+		SendShift:       12,
+		SendMaxInterval: 123456,
+	}
+	configs := []*aConfig.Config{}
+
+	// initial generation of key material for each authority
+	peersMap := make(map[[eddsa.PublicKeySize]byte]*aConfig.AuthorityPeer)
+	for i := 0; i < numAuthorities; i++ {
+		cfg := new(aConfig.Config)
+		cfg.Logging = &aConfig.Logging{
+			Disable: false,
+			File:    "",
+			Level:   "DEBUG",
+		}
+		cfg.Parameters = parameters
+		privateIdentityKey, err := eddsa.NewKeypair(rand.Reader)
+		if err != nil {
+			return err
+		}
+		cfg.Debug = &aConfig.Debug{
+			IdentityKey:      privateIdentityKey,
+			Layers:           3,
+			MinNodesPerLayer: 1,
+			GenerateOnly:     false,
+		}
+		configs = append(configs, cfg)
+		authorityPeer := &aConfig.AuthorityPeer{
+			IdentityPublicKey: cfg.Debug.IdentityKey.PublicKey(),
+			LinkPublicKey:     cfg.Debug.IdentityKey.PublicKey().ToECDH(),
+		}
+		peersMap[cfg.Debug.IdentityKey.PublicKey().ByteArray()] = authorityPeer
+	}
+
+	// tell each authority about it's peers
+	for i := 0; i < numAuthorities; i++ {
+		peers := []*aConfig.AuthorityPeer{}
+		for id, peer := range peersMap {
+			if !bytes.Equal(id[:], configs[i].Debug.IdentityKey.PublicKey().Bytes()) {
+				peers = append(peers, peer)
+			}
+		}
+		configs[i].Authorities = peers
+	}
+	s.votingAuthConfigs = configs
+	return nil
+}
+
+func (s *kimchi) genNodeConfig(isProvider bool, isVoting bool) error {
 	const serverLogFile = "katzenpost.log"
 
 	n := fmt.Sprintf("node-%d", s.nodeIdx)
@@ -115,12 +177,6 @@ func (s *kimchi) genNodeConfig(isProvider bool) error {
 	cfg.Server.DataDir = filepath.Join(s.baseDir, n)
 	cfg.Server.IsProvider = isProvider
 
-	// PKI section.
-	cfg.PKI = new(sConfig.PKI)
-	cfg.PKI.Nonvoting = new(sConfig.Nonvoting)
-	cfg.PKI.Nonvoting.Address = fmt.Sprintf("127.0.0.1:%d", basePort)
-	cfg.PKI.Nonvoting.PublicKey = s.authIdentity.PublicKey().String()
-
 	// Logging section.
 	cfg.Logging = new(sConfig.Logging)
 	cfg.Logging.File = serverLogFile
@@ -135,15 +191,11 @@ func (s *kimchi) genNodeConfig(isProvider bool) error {
 	}
 	cfg.Debug.IdentityKey = identity
 
-	aNode := new(aConfig.Node)
-	aNode.IdentityKey = identity.PublicKey()
 	if isProvider {
 		// Enable the thwack interface.
 		cfg.Management = new(sConfig.Management)
 		cfg.Management.Enable = true
 
-		aNode.Identifier = cfg.Server.Identifier
-		s.authProviders = append(s.authProviders, aNode)
 		s.providerIdx++
 
 		cfg.Provider = new(sConfig.Provider)
@@ -165,57 +217,18 @@ func (s *kimchi) genNodeConfig(isProvider bool) error {
 				cfg.Provider.SpoolDB.Backend = sConfig.BackendSQL
 			}
 		*/
-	} else {
-		s.authNodes = append(s.authNodes, aNode)
-		s.nodeIdx++
 	}
 	s.nodeConfigs = append(s.nodeConfigs, cfg)
 	s.lastPort++
 	return cfg.FixupAndValidate()
 }
 
-func (s *kimchi) genVotingAuthorities() ([]*aServer.Server, error) {
-	authorities := make([]*aConfig.AuthorityPeer, nrAuthorities)
-	for i := 0; i < nrAuthorities; i++ {
-		//p := &pConfig.VotingAuthority{Peers: authorities}
-		k, _ := eddsa.NewKeypair(rand.Reader)
-		l, _ := ecdh.NewKeypair(rand.Reader)
-		a := fmt.Sprintf("127.0.0.1:%d", s.lastPort)
-		s.lastPort++
-
-		authorities[i] = &aConfig.AuthorityPeer{IdentityPublicKey: k.PublicKey(),
-			LinkPublicKey: l.PublicKey(), Addresses: []string{a}}
-	}
-
-	aNodes := make([]*aServer.Server, nrAuthorities)
-	for i, peer := range authorities {
-		// exclude this peer from the set of peers
-		peers := append(authorities[:i], authorities[i+1:]...)
-		authLogFile := fmt.Sprintf("authority%d.log", i)
-		cfg := new(aConfig.Config)
-		cfg.Authority = &aConfig.Authority{Addresses: peer.Addresses}
-		cfg.Authorities = peers
-		cfg.Logging = new(aConfig.Logging)
-		cfg.Logging.File = authLogFile
-		cfg.Logging.Level = "DEBUG"
-		cfg.Mixes = s.authNodes
-		cfg.Providers = s.authProviders
-		cfg.Debug = new(aConfig.Debug)
-		cfg.Debug.IdentityKey = s.authIdentity
-		if err := cfg.FixupAndValidate(); err != nil {
-			return nil, err
-		}
-		authority, err := aServer.New(cfg)
-		if err != nil {
-			return nil, err
-		}
-		aNodes = append(aNodes, authority)
-
-	}
-	return aNodes, nil
+// generateWhitelist returns providers, mixes, error
+func (s *kimchi) generateWhitelist() ([]*aConfig.Node, []*aConfig.Node, error) {
+	return nil, nil, nil
 }
 
-func (s *kimchi) newMailProxy(user, provider string, privateKey *ecdh.PrivateKey) (*mailproxy.Proxy, error) {
+func (s *kimchi) newMailProxy(user, provider string, privateKey *ecdh.PrivateKey, isVoting bool) (*mailproxy.Proxy, error) {
 	const (
 		proxyLogFile = "katzenpost.log"
 		authID       = "testAuth"
@@ -250,21 +263,6 @@ func (s *kimchi) newMailProxy(user, provider string, privateKey *ecdh.PrivateKey
 	acc.IdentityKey = privateKey
 	cfg.Account = append(cfg.Account, acc)
 
-	// NonvotingAuthority section.
-	if cfg.NonvotingAuthority != nil {
-		auth := new(pConfig.NonvotingAuthority)
-		auth.Address = fmt.Sprintf("128.0.0.1:%d", basePort)
-		auth.PublicKey = s.authIdentity.PublicKey()
-		cfg.NonvotingAuthority[authID] = auth
-		acc.NonvotingAuthority = authID
-	}
-	// VotingAuthority section.
-	if cfg.VotingAuthority != nil {
-		auth := new(pConfig.VotingAuthority)
-		cfg.VotingAuthority = make(map[string]*pConfig.VotingAuthority)
-		cfg.VotingAuthority[authID] = auth
-		acc.VotingAuthority = authID
-	}
 	// UpstreamProxy section.
 	/*
 		cfg.UpstreamProxy = new(pConfig.UpstreamProxy)
@@ -344,11 +342,12 @@ func (s *kimchi) logTailer(prefix, path string) {
 
 func main() {
 	var err error
+	var voting = flag.Bool("voting", false, "if set then using voting authorities")
+	var votingNum = flag.Int("votingNum", 10, "the number of voting authorities")
 
-	s := &kimchi{
-		lastPort:   basePort + 1,
-		recipients: make(map[string]*ecdh.PublicKey),
-	}
+	flag.Parse()
+
+	s := newKimchi(basePort)
 
 	// TODO: Someone that cares enough can use a config file for this, but
 	// this is ultimately just for testing.
@@ -371,30 +370,61 @@ func main() {
 		log.Printf("WARNING: Descriptor publication for the next epoch will FAIL.")
 	}
 
+	// Generate the authority configs
+	if *voting {
+		err := s.genVotingAuthoritiesCfg(*votingNum)
+		if err != nil {
+			log.Fatalf("getVotingAuthoritiesCfg failed: %s", err)
+		}
+	} else {
+		// generate nonvoting config
+		panic("nonvoting authority not yet supported")
+	}
+
 	// Generate the provider configs.
 	for i := 0; i < nrProviders; i++ {
-		if err = s.genNodeConfig(true); err != nil {
+		if err = s.genNodeConfig(true, *voting); err != nil {
 			log.Fatalf("Failed to generate provider config: %v", err)
 		}
 	}
 
 	// Generate the node configs.
 	for i := 0; i < nrNodes; i++ {
-		if err = s.genNodeConfig(false); err != nil {
+		if err = s.genNodeConfig(false, *voting); err != nil {
 			log.Fatalf("Failed to generate node config: %v", err)
 		}
 	}
 
-	// Generate the authority config, and launch the authority.
-	authorities, err := s.genVotingAuthorities()
-	for _, a := range authorities {
-		s.servers = append(s.servers, a)
-	}
+	// Generate node whitelist
+	providerWhitelist, mixWhitelist, err := s.generateWhitelist()
 	if err != nil {
-		log.Fatalf("getAuthorities failed: %s", err)
+		panic(err)
 	}
 
-	go s.logTailer("authority", filepath.Join(s.authConfig.Authority.DataDir, s.authConfig.Logging.File))
+	if *voting {
+		err := s.addVotingWhitelist()
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		err := s.addNonvotingWhitelist()
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	// Launch the directory authority or authorities
+	if *voting {
+		err := s.runVotingAuthorities()
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		err := s.runNonvotingAuthority()
+		if err != nil {
+			panic(err)
+		}
+	}
 
 	// Launch all the nodes.
 	for _, v := range s.nodeConfigs {
@@ -415,18 +445,18 @@ func main() {
 	s.recipients["bob@provider-1.example.org"] = bobPrivateKey.PublicKey()
 
 	// Initialize Alice's mailproxy.
-	aliceProvider := s.authProviders[0].Identifier
+	// XXX aliceProvider := s.authProviders[0].Identifier
 	if err = s.thwackUser(s.nodeConfigs[0], "aLiCe", alicePrivateKey.PublicKey()); err != nil {
 		log.Fatalf("Failed to add user: %v", err)
 	}
-	aliceProxy, err := s.newMailProxy("alice", aliceProvider, alicePrivateKey)
+	aliceProxy, err := s.newMailProxy("alice", aliceProvider, alicePrivateKey, *voting)
 	if err != nil {
 		log.Fatalf("Failed to create alice client: %v", err)
 	}
 	s.servers = append(s.servers, aliceProxy)
 
 	// Initialize Bob's mailproxy.
-	bobProvider := s.authProviders[1].Identifier
+	// XXX bobProvider := s.authProviders[1].Identifier
 	if err = s.thwackUser(s.nodeConfigs[1], "BoB", bobPrivateKey.PublicKey()); err != nil {
 		log.Fatalf("Failed to add user: %v", err)
 	}
