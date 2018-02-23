@@ -191,6 +191,18 @@ func (s *kimchi) genNodeConfig(isProvider bool, isVoting bool) error {
 	}
 	cfg.Debug.IdentityKey = identity
 
+	if isVoting {
+		cfg.PKI = &sConfig.PKI{
+			Voting: &sConfig.Voting{
+				Addresses:         []string{},
+				IdentityPublicKey: "",
+				LinkPublicKey:     "",
+			},
+		}
+	} else {
+		panic("wtf")
+	}
+
 	if isProvider {
 		// Enable the thwack interface.
 		cfg.Management = new(sConfig.Management)
