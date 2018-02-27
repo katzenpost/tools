@@ -23,7 +23,6 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	mrand "math/rand"
 	"net/textproto"
 	"os"
 	"os/signal"
@@ -33,8 +32,8 @@ import (
 	"time"
 
 	"github.com/hpcloud/tail"
-	//aServer "github.com/katzenpost/authority/voting/server"
-	aConfig "github.com/katzenpost/authority/voting/server/config"
+	vServer "github.com/katzenpost/authority/voting/server"
+	vConfig "github.com/katzenpost/authority/voting/server/config"
 	"github.com/katzenpost/core/crypto/ecdh"
 	"github.com/katzenpost/core/crypto/eddsa"
 	"github.com/katzenpost/core/crypto/rand"
@@ -67,7 +66,7 @@ type kimchi struct {
 	baseDir   string
 	logWriter io.Writer
 
-	votingAuthConfigs []*aConfig.Config
+	votingAuthConfigs []*vConfig.Config
 
 	nodeConfigs []*sConfig.Config
 	lastPort    uint16
@@ -110,20 +109,20 @@ func (s *kimchi) initLogging() error {
 }
 
 func (s *kimchi) genVotingAuthoritiesCfg(numAuthorities int) error {
-	parameters := &aConfig.Parameters{
+	parameters := &vConfig.Parameters{
 		MixLambda:       1,
 		MixMaxDelay:     10000,
 		SendLambda:      123,
 		SendShift:       12,
 		SendMaxInterval: 123456,
 	}
-	configs := []*aConfig.Config{}
+	configs := []*vConfig.Config{}
 
 	// initial generation of key material for each authority
-	peersMap := make(map[[eddsa.PublicKeySize]byte]*aConfig.AuthorityPeer)
+	peersMap := make(map[[eddsa.PublicKeySize]byte]*vConfig.AuthorityPeer)
 	for i := 0; i < numAuthorities; i++ {
-		cfg := new(aConfig.Config)
-		cfg.Logging = &aConfig.Logging{
+		cfg := new(vConfig.Config)
+		cfg.Logging = &vConfig.Logging{
 			Disable: false,
 			File:    "",
 			Level:   "DEBUG",
@@ -133,14 +132,14 @@ func (s *kimchi) genVotingAuthoritiesCfg(numAuthorities int) error {
 		if err != nil {
 			return err
 		}
-		cfg.Debug = &aConfig.Debug{
+		cfg.Debug = &vConfig.Debug{
 			IdentityKey:      privateIdentityKey,
 			Layers:           3,
 			MinNodesPerLayer: 1,
 			GenerateOnly:     false,
 		}
 		configs = append(configs, cfg)
-		authorityPeer := &aConfig.AuthorityPeer{
+		authorityPeer := &vConfig.AuthorityPeer{
 			IdentityPublicKey: cfg.Debug.IdentityKey.PublicKey(),
 			LinkPublicKey:     cfg.Debug.IdentityKey.PublicKey().ToECDH(),
 		}
@@ -149,7 +148,7 @@ func (s *kimchi) genVotingAuthoritiesCfg(numAuthorities int) error {
 
 	// tell each authority about it's peers
 	for i := 0; i < numAuthorities; i++ {
-		peers := []*aConfig.AuthorityPeer{}
+		peers := []*vConfig.AuthorityPeer{}
 		for id, peer := range peersMap {
 			if !bytes.Equal(id[:], configs[i].Debug.IdentityKey.PublicKey().Bytes()) {
 				peers = append(peers, peer)
@@ -236,8 +235,35 @@ func (s *kimchi) genNodeConfig(isProvider bool, isVoting bool) error {
 }
 
 // generateWhitelist returns providers, mixes, error
-func (s *kimchi) generateWhitelist() ([]*aConfig.Node, []*aConfig.Node, error) {
-	return nil, nil, nil
+func (s *kimchi) generateVotingWhitelist() ([]*vConfig.Node, []*vConfig.Node, error) {
+	mixes := []*vConfig.Node{}
+	providers := []*vConfig.Node{}
+	for _, nodeCfg := range s.nodeConfigs {
+		if nodeCfg.Server.IsProvider {
+			provider := &vConfig.Node{
+				Identifier:  nodeCfg.Server.Identifier,
+				IdentityKey: nodeCfg.Debug.IdentityKey.PublicKey(),
+			}
+			providers = append(providers, provider)
+		}
+		mix := &vConfig.Node{
+			IdentityKey: nodeCfg.Debug.IdentityKey.PublicKey(),
+		}
+		mixes = append(mixes, mix)
+	}
+
+	return providers, mixes, nil
+}
+
+func (s *kimchi) runVotingAuthorities() error {
+	for _, vCfg := range s.votingAuthConfigs {
+		server, err := vServer.New(vCfg)
+		if err != nil {
+			return err
+		}
+		s.servers = append(s.servers, server)
+	}
+	return nil
 }
 
 func (s *kimchi) newMailProxy(user, provider string, privateKey *ecdh.PrivateKey, isVoting bool) (*mailproxy.Proxy, error) {
@@ -407,35 +433,22 @@ func main() {
 		}
 	}
 
-	// Generate node whitelist
-	providerWhitelist, mixWhitelist, err := s.generateWhitelist()
-	if err != nil {
-		panic(err)
-	}
-
 	if *voting {
-		err := s.addVotingWhitelist()
+		providerWhitelist, mixWhitelist, err := s.generateVotingWhitelist()
 		if err != nil {
 			panic(err)
 		}
-	} else {
-		err := s.addNonvotingWhitelist()
+		for _, aCfg := range s.votingAuthConfigs {
+			aCfg.Mixes = mixWhitelist
+			aCfg.Providers = providerWhitelist
+		}
+		err = s.runVotingAuthorities()
 		if err != nil {
 			panic(err)
 		}
-	}
 
-	// Launch the directory authority or authorities
-	if *voting {
-		err := s.runVotingAuthorities()
-		if err != nil {
-			panic(err)
-		}
 	} else {
-		err := s.runNonvotingAuthority()
-		if err != nil {
-			panic(err)
-		}
+		// nonvoting here
 	}
 
 	// Launch all the nodes.
@@ -461,22 +474,11 @@ func main() {
 	if err = s.thwackUser(s.nodeConfigs[0], "aLiCe", alicePrivateKey.PublicKey()); err != nil {
 		log.Fatalf("Failed to add user: %v", err)
 	}
-	aliceProxy, err := s.newMailProxy("alice", aliceProvider, alicePrivateKey, *voting)
-	if err != nil {
-		log.Fatalf("Failed to create alice client: %v", err)
-	}
-	s.servers = append(s.servers, aliceProxy)
-
 	// Initialize Bob's mailproxy.
 	// XXX bobProvider := s.authProviders[1].Identifier
 	if err = s.thwackUser(s.nodeConfigs[1], "BoB", bobPrivateKey.PublicKey()); err != nil {
 		log.Fatalf("Failed to add user: %v", err)
 	}
-	bobProxy, err := s.newMailProxy("bob", bobProvider, bobPrivateKey)
-	if err != nil {
-		log.Fatalf("Failed to create bob client: %v", err)
-	}
-	s.servers = append(s.servers, bobProxy)
 
 	// Wait for a signal to tear it all down.
 	ch := make(chan os.Signal)
