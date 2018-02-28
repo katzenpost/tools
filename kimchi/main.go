@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -128,6 +129,11 @@ func (s *kimchi) genVotingAuthoritiesCfg(numAuthorities int) error {
 			Level:   "DEBUG",
 		}
 		cfg.Parameters = parameters
+		cfg.Authority = &vConfig.Authority{
+			Addresses: []string{fmt.Sprintf("127.0.0.1:%d", s.lastPort)},
+			DataDir:   filepath.Join(s.baseDir, fmt.Sprintf("authority%d", i)),
+		}
+		s.lastPort += 1
 		privateIdentityKey, err := eddsa.NewKeypair(rand.Reader)
 		if err != nil {
 			return err
@@ -191,11 +197,26 @@ func (s *kimchi) genNodeConfig(isProvider bool, isVoting bool) error {
 	cfg.Debug.IdentityKey = identity
 
 	if isVoting {
+		peers := []*sConfig.Peer{}
+		for _, peer := range s.votingAuthConfigs[0].Authorities {
+			idKey, err := peer.IdentityPublicKey.MarshalText()
+			if err != nil {
+				return err
+			}
+			linkKey, err := peer.LinkPublicKey.MarshalText()
+			if err != nil {
+				return err
+			}
+			p := &sConfig.Peer{
+				Addresses:         peer.Addresses,
+				IdentityPublicKey: string(idKey),
+				LinkPublicKey:     string(linkKey),
+			}
+			peers = append(peers, p)
+		}
 		cfg.PKI = &sConfig.PKI{
 			Voting: &sConfig.Voting{
-				Addresses:         []string{},
-				IdentityPublicKey: "",
-				LinkPublicKey:     "",
+				Peers: peers,
 			},
 		}
 	} else {
@@ -231,7 +252,11 @@ func (s *kimchi) genNodeConfig(isProvider bool, isVoting bool) error {
 	}
 	s.nodeConfigs = append(s.nodeConfigs, cfg)
 	s.lastPort++
-	return cfg.FixupAndValidate()
+	err = cfg.FixupAndValidate()
+	if err != nil {
+		return errors.New("genNodeConfig failure on fixupandvalidate")
+	}
+	return nil
 }
 
 // generateWhitelist returns providers, mixes, error
