@@ -148,6 +148,7 @@ func (s *kimchi) genVotingAuthoritiesCfg(numAuthorities int) error {
 		authorityPeer := &vConfig.AuthorityPeer{
 			IdentityPublicKey: cfg.Debug.IdentityKey.PublicKey(),
 			LinkPublicKey:     cfg.Debug.IdentityKey.PublicKey().ToECDH(),
+			Addresses:         cfg.Authority.Addresses,
 		}
 		peersMap[cfg.Debug.IdentityKey.PublicKey().ByteArray()] = authorityPeer
 	}
@@ -211,6 +212,9 @@ func (s *kimchi) genNodeConfig(isProvider bool, isVoting bool) error {
 				Addresses:         peer.Addresses,
 				IdentityPublicKey: string(idKey),
 				LinkPublicKey:     string(linkKey),
+			}
+			if len(peer.Addresses) == 0 {
+				panic("wtf")
 			}
 			peers = append(peers, p)
 		}
