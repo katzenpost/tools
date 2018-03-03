@@ -253,6 +253,8 @@ func (s *kimchi) genNodeConfig(isProvider bool, isVoting bool) error {
 				cfg.Provider.SpoolDB.Backend = sConfig.BackendSQL
 			}
 		*/
+	} else {
+		s.nodeIdx++
 	}
 	s.nodeConfigs = append(s.nodeConfigs, cfg)
 	s.lastPort++
@@ -274,6 +276,7 @@ func (s *kimchi) generateVotingWhitelist() ([]*vConfig.Node, []*vConfig.Node, er
 				IdentityKey: nodeCfg.Debug.IdentityKey.PublicKey(),
 			}
 			providers = append(providers, provider)
+			continue
 		}
 		mix := &vConfig.Node{
 			IdentityKey: nodeCfg.Debug.IdentityKey.PublicKey(),
