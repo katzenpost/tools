@@ -125,13 +125,14 @@ func (s *kimchi) genVotingAuthoritiesCfg(numAuthorities int) error {
 		cfg := new(vConfig.Config)
 		cfg.Logging = &vConfig.Logging{
 			Disable: false,
-			File:    "",
+			File:    "katzenpost.log",
 			Level:   "DEBUG",
 		}
 		cfg.Parameters = parameters
 		cfg.Authority = &vConfig.Authority{
-			Addresses: []string{fmt.Sprintf("127.0.0.1:%d", s.lastPort)},
-			DataDir:   filepath.Join(s.baseDir, fmt.Sprintf("authority%d", i)),
+			Identifier: fmt.Sprintf("authority-%v.example.org", i),
+			Addresses:  []string{fmt.Sprintf("127.0.0.1:%d", s.lastPort)},
+			DataDir:    filepath.Join(s.baseDir, fmt.Sprintf("authority%d", i)),
 		}
 		s.lastPort += 1
 		privateIdentityKey, err := eddsa.NewKeypair(rand.Reader)
@@ -293,6 +294,7 @@ func (s *kimchi) runVotingAuthorities() error {
 		if err != nil {
 			return err
 		}
+		go s.logTailer(vCfg.Authority.Identifier, filepath.Join(vCfg.Authority.DataDir, vCfg.Logging.File))
 		s.servers = append(s.servers, server)
 	}
 	return nil
