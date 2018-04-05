@@ -1,0 +1,16 @@
+[Unit]
+Description=Katzenpost Mix Tailon Weblog
+After=network.target
+
+[Service]
+Type=simple
+User=katzenpost
+WorkingDirectory=/var/log/katzenpost/
+ExecStart=/usr/local/bin/tailon -b 0.0.0.0:8081 -f katzenpost.log
+PrivateTmp=yes
+NoNewPrivileges=yes
+# RestartSec=5
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

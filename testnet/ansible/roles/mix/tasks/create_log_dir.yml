@@ -1,0 +1,7 @@
+- name: create /var/log/katzenpost
+  file:
+    path: /var/log/katzenpost
+    state: directory
+    owner: katzenpost
+    group: katzenpost
+    mode: 0700

@@ -1,0 +1,37 @@
+---
+# This playbook deploys the katzenpost mixnet
+
+- name: Build katzenpost binaries locally
+  hosts: Builder
+  connection: local
+  roles:
+    - builder
+  vars:
+    buildTime: "{{ ansible_date_time.iso8601_basic }}"
+    buildDir: "{{ ansible_env.PWD }}/{{ buildTime }}"
+    serverDestPath: "{{ buildDir}}/server"
+    authorityDestPath: "{{ buildDir}}/nonvoting"
+
+- name: Install/Update katzenpost on Authority
+  remote_user: root
+  hosts: Authority
+  roles:
+    - authority
+  vars:
+    binaryPath: "latest/nonvoting"
+
+- name: Install/Update katzenpost on Mixes
+  remote_user: root
+  hosts: Mixes
+  roles:
+    - mix
+  vars:
+    binaryPath: "latest/server"
+
+- name: Install/Update katzenpost on Providers
+  remote_user: root
+  hosts: Providers
+  roles:
+    - provider
+  vars:
+    binaryPath: "latest/server"

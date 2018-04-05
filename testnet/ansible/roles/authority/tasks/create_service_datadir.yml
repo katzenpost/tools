@@ -1,0 +1,7 @@
+- name: create /var/lib/katzenpost-authority
+  file:
+    path: /var/lib/katzenpost-authority
+    state: directory
+    owner: katzenpost-authority
+    group: katzenpost-authority
+    mode: 0700

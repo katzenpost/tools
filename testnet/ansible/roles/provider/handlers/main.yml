@@ -1,0 +1,12 @@
+# handler to handle provider notifications
+- name: reload systemd
+  systemd: state=started name=katzen-provider daemon_reload=yes enabled=yes
+
+- name: start katzen-provider
+  service: name=katzen-provider state=started enabled=yes
+
+- name: restart katzen-provider
+  service: name=katzen-provider state=restarted enabled=yes
+
+- name: restart katzenmix-tailon
+  service: name=katzenmix-tailon state=restarted enabled=yes

@@ -1,0 +1,21 @@
+# ANSIBLE_INVENTORY for kimchi generated configuration
+# This is an example configuration.
+[Authority]
+nonvoting ansible_host=127.0.0.1 idPubKey=nonvoting.public.pem idPrivKey=nonvoting.private.pem authorityConfig=nonvoting.toml linkPrivKey=nonvoting.link.private.pem
+
+[Mixes]
+node-0 ansible_host=127.0.0.1 idPubKey=node-0.example.org.public.pem idPrivKey=node-0.example.org.private.pem mixConfig=node-0.example.org.toml linkPrivKey=node-0.example.org.link.private.pem
+# probably can't use all of these on localhost because they share DataDir..
+#node-1 ansible_host=127.0.0.1 idPubKey=node-1.example.org.public.pem idPrivKey=node-1.example.org.private.pem mixConfig=node-1.example.org.toml linkPrivKey=node-1.example.org.link.private.pem
+#node-2 ansible_host=127.0.0.1 idPubKey=node-2.example.org.public.pem idPrivKey=node-2.example.org.private.pem mixConfig=node-2.example.org.toml linkPrivKey=node-2.example.org.link.private.pem
+#node-3 ansible_host=127.0.0.1 idPubKey=node-3.example.org.public.pem idPrivKey=node-3.example.org.private.pem mixConfig=node-3.example.org.toml linkPrivKey=node-3.example.org.link.private.pem
+#node-4 ansible_host=127.0.0.1 idPubKey=node-4.example.org.public.pem idPrivKey=node-4.example.org.private.pem mixConfig=node-4.example.org.toml linkPrivKey=node-4.example.org.link.private.pem
+#node-5 ansible_host=127.0.0.1 idPubKey=node-5.example.org.public.pem idPrivKey=node-5.example.org.private.pem mixConfig=node-5.example.org.toml linkPrivKey=node-5.example.org.link.private.pem
+
+[Providers]
+#provider-0 ansible_host=127.0.0.1 idPubKey=provider-0.example.org.public.pem idPrivKey=provider-0.example.org.private.pem providerConfig=provider-0.example.org.toml linkPrivKey=provider-0.example.org.link.private.pem
+# probably can't use all of these on localhost because they share DataDir..
+#provider-1 ansible_host=127.0.0.1 idPubKey=provider-1.example.org.public.pem idPrivKey=provider-1.example.org.private.pem providerConfig=provider-1.example.org.toml linkPrivKey=provider-1.example.org.link.private.pem
+
+[Builder]
+127.0.0.1

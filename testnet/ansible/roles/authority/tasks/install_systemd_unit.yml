@@ -1,0 +1,11 @@
+- name: install katzen-authority systemd unit file
+  template: src=katzen-authority.j2 dest=/etc/systemd/system/katzen-authority.service
+  notify:
+    - reload systemd
+    - start katzen-authority
+
+- name: install katzenauthority-tailon systemd unit file
+  template: src=katzenauthority-tailon.j2 dest=/etc/systemd/system/katzenauthority-tailon.service
+  notify:
+    - reload systemd
+    - restart katzenauthority-tailon
