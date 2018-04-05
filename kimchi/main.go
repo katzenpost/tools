@@ -554,7 +554,7 @@ func saveKeys(cfg interface{}) (err error) {
 }
 
 func saveCfg(cfg interface{}) error {
-	fileName := fmt.Sprintf("%s.cfg", identifier(cfg))
+	fileName := fmt.Sprintf("%s.toml", identifier(cfg))
 	log.Printf("saveCfg of %s", fileName)
 	f, err := os.Create(fileName)
 	if err != nil {
