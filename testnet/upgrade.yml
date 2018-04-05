@@ -1,0 +1,27 @@
+tasks:
+          # XXX: how to run this command locally?
+        - name: build the latest katzenpost binaries
+          command: ./build.sh
+
+        - name: upgrade the katzenpost binary
+          copy: src=./server dest=/usr/bin/katzenpost owner=root group=root mode=0644
+
+        - name: upgrade the nonvoting binary
+          copy: src=./nonvoting dest=/usr/bin/nonvoting owner=root group=root mode=0644
+
+        # XXX: select the correct key for each host
+        - name: rotate the mix identity key
+          copy: src=./identity.public.pem dest=/var/lib/katzenpost/identity.public.pem owner=root group=katzenpost mode=0640
+          copy: src=./identity.private.pem dest=/var/lib/katzenpost/identity.private.pem owner=root group=katzenpost mode=0640
+
+        # XXX: select the correct configuration file for each host
+        - name: update the katzenpost config
+          copy: src=./katzenpost.toml dest=/etc/katenpost/katzenpost.toml
+
+        # XXX: only run on the authority(ies)
+        - name: update the nonvoting config
+          copy: src=./nonvoting.toml dest=/etc/katzenpost/nonvoting.toml
+
+        - name: start the katzenpost service
+          service: katzenmix
+          state: started
