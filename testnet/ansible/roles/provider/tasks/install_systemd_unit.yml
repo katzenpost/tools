@@ -1,0 +1,5 @@
+- name: install katzen-provider systemd unit file
+  template: src=katzen-provider.j2 dst=/etc/systemd/system/katzen-provider.service
+
+- name: start katzen-provider
+  systemd: state=started name=katzen-provider daemon_reload=yes
