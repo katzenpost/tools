@@ -423,11 +423,11 @@ func main() {
 		log.Fatalf("Failed to launch authority: %v", err)
 	}
 	if *genOnly {
-		if err := saveCfg(s.authConfig); err != nil {
-			log.Fatalf("Failed to saveCfg of authority with %s", err)
-		}
 		if err := saveKeys(s.authConfig); err != nil {
 			log.Fatalf("%s", err)
+		}
+		if err := saveCfg(s.authConfig); err != nil {
+			log.Fatalf("Failed to saveCfg of authority with %s", err)
 		}
 	}
 
@@ -441,10 +441,10 @@ func main() {
 			log.Fatalf("Failed to launch node: %v", err)
 		}
 		if *genOnly {
-			if err := saveCfg(v); err != nil {
+			if err := saveKeys(v); err != nil {
 				log.Fatalf("%s", err)
 			}
-			if err := saveKeys(v); err != nil {
+			if err := saveCfg(v); err != nil {
 				log.Fatalf("%s", err)
 			}
 		}
@@ -514,6 +514,16 @@ func identifier(cfg interface{}) string {
 	}
 }
 
+func normalizePaths(cfg interface{}) {
+	switch cfg.(type) {
+	case *sConfig.Config:
+		cfg.(*sConfig.Config).Server.DataDir = "/var/lib/katzenpost"
+		cfg.(*sConfig.Config).Management.Path = "/var/lib/katzenpost/management_sock"
+	case *aConfig.Config:
+		cfg.(*aConfig.Config).Authority.DataDir = "/var/lib/katzenpost"
+	}
+}
+
 func saveKeys(cfg interface{}) (err error) {
 	var identityPrivateKeyFile, identityPublicKeyFile string
 	identityKey := new(eddsa.PrivateKey)
@@ -555,6 +565,7 @@ func saveKeys(cfg interface{}) (err error) {
 
 func saveCfg(cfg interface{}) error {
 	fileName := fmt.Sprintf("%s.toml", identifier(cfg))
+	normalizePaths(cfg)
 	log.Printf("saveCfg of %s", fileName)
 	f, err := os.Create(fileName)
 	if err != nil {
