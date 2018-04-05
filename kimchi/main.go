@@ -17,6 +17,8 @@
 package main
 
 import (
+	"encoding/pem"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -29,6 +31,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	"github.com/hpcloud/tail"
 	aServer "github.com/katzenpost/authority/nonvoting/server"
 	aConfig "github.com/katzenpost/authority/nonvoting/server/config"
@@ -354,7 +357,8 @@ func (s *kimchi) logTailer(prefix, path string) {
 
 func main() {
 	var err error
-
+	genOnly := flag.Bool("g", false, "Generate configuration files and exit immediately.")
+	flag.Parse()
 	s := &kimchi{
 		lastPort:   basePort + 1,
 		recipients: make(map[string]*ecdh.PublicKey),
@@ -404,19 +408,45 @@ func main() {
 	if err = s.genAuthConfig(); err != nil {
 		log.Fatalf("Failed to generate authority config: %v", err)
 	}
+
+	// If generate only - set the debug option for each node.
+	if *genOnly {
+		for _, v := range s.nodeConfigs {
+			v.Debug.GenerateOnly = true
+		}
+		s.authConfig.Debug.GenerateOnly = true
+	}
+
 	var svr server
 	svr, err = aServer.New(s.authConfig)
-	if err != nil {
+	if err != nil && !*genOnly {
 		log.Fatalf("Failed to launch authority: %v", err)
 	}
+	if *genOnly {
+		if err := saveCfg(s.authConfig); err != nil {
+			log.Fatalf("Failed to saveCfg of authority with %s", err)
+		}
+		if err := saveKeys(s.authConfig); err != nil {
+			log.Fatalf("%s", err)
+		}
+	}
+
 	s.servers = append(s.servers, svr)
 	go s.logTailer("authority", filepath.Join(s.authConfig.Authority.DataDir, s.authConfig.Logging.File))
 
 	// Launch all the nodes.
 	for _, v := range s.nodeConfigs {
 		svr, err = nServer.New(v)
-		if err != nil {
+		if err != nil && !*genOnly {
 			log.Fatalf("Failed to launch node: %v", err)
+		}
+		if *genOnly {
+			if err := saveCfg(v); err != nil {
+				log.Fatalf("%s", err)
+			}
+			if err := saveKeys(v); err != nil {
+				log.Fatalf("%s", err)
+			}
 		}
 		s.servers = append(s.servers, svr)
 
@@ -470,4 +500,68 @@ func main() {
 	}
 	s.Wait()
 	log.Printf("Terminated.")
+}
+
+func identifier(cfg interface{}) string {
+	switch cfg.(type) {
+	case *sConfig.Config:
+		return cfg.(*sConfig.Config).Server.Identifier
+	case *aConfig.Config:
+		return "nonvoting"
+	default:
+		log.Fatalf("identifier() passed unexpected type")
+		return ""
+	}
+}
+
+func saveKeys(cfg interface{}) (err error) {
+	var identityPrivateKeyFile, identityPublicKeyFile string
+	identityKey := new(eddsa.PrivateKey)
+
+	pubFile := fmt.Sprintf("%s.public.pem", identifier(cfg))
+	privFile := fmt.Sprintf("%s.private.pem", identifier(cfg))
+
+	switch cfg.(type) {
+	case *sConfig.Config:
+		cfg := cfg.(*sConfig.Config)
+		identityPrivateKeyFile = filepath.Join(cfg.Server.DataDir, "identity.private.pem")
+		identityPublicKeyFile = filepath.Join(cfg.Server.DataDir, "identity.public.pem")
+		if identityKey, err = eddsa.Load(identityPrivateKeyFile, identityPublicKeyFile, rand.Reader); err != nil {
+			return err
+		}
+	case *aConfig.Config:
+		cfg := cfg.(*aConfig.Config)
+		if cfg.Debug.IdentityKey != nil {
+			identityKey.FromBytes(cfg.Debug.IdentityKey.Bytes())
+		}
+	default:
+		log.Fatalf("privIdKeY() passed unexpected type")
+	}
+
+	const keyType = "ED25519 PRIVATE KEY"
+	blk := &pem.Block{
+		Type:  keyType,
+		Bytes: identityKey.Bytes(),
+	}
+
+	if err = ioutil.WriteFile(privFile, pem.EncodeToMemory(blk), 0600); err != nil {
+		return err
+	}
+	if err = identityKey.PublicKey().ToPEMFile(pubFile); err != nil {
+		return err
+	}
+	return nil
+}
+
+func saveCfg(cfg interface{}) error {
+	fileName := fmt.Sprintf("%s.cfg", identifier(cfg))
+	log.Printf("saveCfg of %s", fileName)
+	f, err := os.Create(fileName)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	// Serialize the descriptor.
+	enc := toml.NewEncoder(f)
+	return enc.Encode(cfg)
 }
