@@ -1,0 +1,4 @@
+- name: update katzen-provider binary
+  copy: src=./server dest=/usr/bin/katzenpost owner=root group=root mode=0644
+  notify:
+    - restart katzen-provider

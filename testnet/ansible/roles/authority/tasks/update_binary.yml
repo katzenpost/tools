@@ -1,0 +1,4 @@
+- name: update katzen-authority binary
+  copy: src=./nonvoting dest=/usr/bin/katzenpost-authority owner=root group=root mode=0644
+  notify:
+    - restart katzen-authority

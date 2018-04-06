@@ -1,0 +1,5 @@
+  # XXX: pass configuration filename by argument
+- name: update katzen-authority config
+  copy: src=./nonvoting.toml dest=/etc/katenpost/nonvoting.toml owner=root group=root mode=0644
+  notify:
+    - restart katzen-authority
