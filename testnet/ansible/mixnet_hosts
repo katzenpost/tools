@@ -1,13 +1,13 @@
 # ANSIBLE_INVENTORY for testnet
 [Authority]
-testauthority   ansible_host=37.218.242.147 idPubKey=id_testauth.pub idPrivKey=id_testauth
+testauthority   ansible_host=37.218.242.147 idPubKey=id_testauth.pub idPrivKey=id_testauth authorityConfig=testauthority.toml
 
 [Mixes]
-assurancetourix ansible_host=37.218.242.147 idPubKey=id_assurancetourix.pub idPrivKey=id_assurancetourix
-katzenpost1     ansible_host=103.104.244.2 idPubKey=id_katzenpost1.pub idPrivKey=id_katzenpost1
-pano            ansible_host=37.218.240.163 idPubKey=id_pano.pub idPrivKey=id_pano
-katzenpost2     ansible_host=103.104.244.3 idPubKey=id_katzenpost2.pub idPrivKey=id_katzenpost2
+assurancetourix ansible_host=37.218.242.147 idPubKey=id_assurancetourix.pub idPrivKey=id_assurancetourix mixConfig=assurancetourix.toml
+katzenpost1     ansible_host=103.104.244.2 idPubKey=id_katzenpost1.pub idPrivKey=id_katzenpost1 mixConfig=katzenpost1.toml
+pano            ansible_host=37.218.240.163 idPubKey=id_pano.pub idPrivKey=id_pano mixConfig=katzenpost1.toml
+katzenpost2     ansible_host=103.104.244.3 idPubKey=id_katzenpost2.pub idPrivKey=id_katzenpost2 mixConfig=katzenpost2.toml
 
 [Providers]
-idefix          ansible_host=217.197.90.63 idPubKey=id_idefix.pub idPrivKey=id_idefix
-ramix           ansible_host=199.119.112.92 idPubKey=id_ramix.pub idPrivKey=id_ramix
+idefix          ansible_host=217.197.90.63 idPubKey=id_idefix.pub idPrivKey=id_idefix providerConfig=idefix.toml
+ramix           ansible_host=199.119.112.92 idPubKey=id_ramix.pub idPrivKey=id_ramix providerConfig=ramix.toml
