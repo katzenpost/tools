@@ -1,0 +1,6 @@
+# handler to handle mix notifications
+- name: reload systemd
+  systemd: state=started name=katzen-mix daemon_reload=yes
+
+- name: start katzen-mix
+  service: name=katzen-mix state=started enabled=yes

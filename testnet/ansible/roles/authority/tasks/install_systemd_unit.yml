@@ -1,5 +1,5 @@
 - name: install katzen-authority systemd unit file
   template: src=katzen-authority.j2 dst=/etc/systemd/system/katzen-authority.service
-
-- name: start katzen-authority
-  systemd: state=started name=katzen-authority daemon_reload=yes
+  notify:
+    - reload systemd
+    - start katzen-authority
