@@ -1,5 +1,8 @@
-- name: update the authority identity key
+---
+- name: update the authority identity public key
   copy: src="{{ idPubKey }}" dest=/etc/katzenpost/identity.public.pem owner=root group=katzenpost-authority mode=0640
+
+- name: update the authority identity private key
   copy: src="{{ idPrivKey }}" dest=/etc/katzenpost/identity.private.pem owner=root group=katzenpost-authority mode=0640
   notify:
     - restart katzen-authority

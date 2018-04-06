@@ -1,6 +1,12 @@
 ---
 # This playbook deploys the katzenpost mixnet
 
+- name: Build katzenpost binaries locally
+- hosts: 127.0.0.1
+  connection: local
+  roles:
+    - builder
+
 - name: Install katzenpost systemd unit on Authority
   remote_user: root
   hosts: Authority
