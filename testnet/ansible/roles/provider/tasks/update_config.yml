@@ -1,4 +1,4 @@
 - name: update katzen-provider config
-  copy: src={{ providerConfig }} dest=/etc/katenpost/katzenpost.toml owner=root group=root mode=0644
+  copy: src="{{ providerConfig }}" dest=/etc/katenpost/katzenpost.toml owner=root group=root mode=0644
   notify:
     - restart katzen-provider
