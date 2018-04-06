@@ -4,3 +4,6 @@
 
 - name: start katzen-mix
   service: name=katzen-mix state=started enabled=yes
+
+- name: restart katzen-mix
+  service: name=katzen-mix state=restarted

@@ -4,3 +4,6 @@
 
 - name: start katzen-authority
   service: name=katzen-authority state=started enabled=yes
+
+- name: restart katzen-authority
+  service: name=katzen-authority state=restarted
