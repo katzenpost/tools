@@ -1,0 +1,38 @@
+---
+# This playbook deploys the katzenpost mixnet
+
+- name: Install katzenpost systemd unit on Authority
+  remote_user: root
+  hosts: Authority
+  roles:
+    - authority
+
+- name: Install katzenpost systemd unit on Mixes
+  remote_user: root
+  hosts: Mixes
+  roles:
+    - mix
+
+- name: Install katzenpost systemd unit on Providers
+  remote_user: root
+  hosts: Providers
+  roles:
+    - provider
+
+- name: Update katzenpost on Authority
+  remote_user: root
+  hosts: Authority
+  roles:
+    - authority
+
+- name: Update katzenpost on Mixes
+  remote_user: root
+  hosts: Mixes
+  roles:
+    - mix
+
+- name: Update katzenpost on Providers
+  remote_user: root
+  hosts: Providers
+  roles:
+    - provider
