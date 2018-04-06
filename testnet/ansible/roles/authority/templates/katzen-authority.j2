@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Type=simple
-User=katzenpost
+User=katzenpost-authority
 WorkingDirectory=/var/lib/katzenpost-authority
 ExecStart=/usr/bin/nonvoting -f authority.toml
 PrivateTmp=yes
