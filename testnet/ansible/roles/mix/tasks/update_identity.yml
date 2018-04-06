@@ -1,5 +1,5 @@
 - name: rotate mix identity key
-  copy: src=./identity.public.pem dest=/etc/katzenpost/identity.public.pem owner=root group=katzenpost mode=0640
-  copy: src=./identity.private.pem dest=/etc/katzenpost/identity.private.pem owner=root group=katzenpost mode=0640
+  copy: src={{ idPubKey }} dest=/etc/katzenpost/identity.public.pem owner=root group=katzenpost mode=0640
+  copy: src={{ idPrivKey }} dest=/etc/katzenpost/identity.private.pem owner=root group=katzenpost mode=0640
   notify:
     - restart katzen-mix
