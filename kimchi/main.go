@@ -423,6 +423,7 @@ func main() {
 		log.Fatalf("Failed to launch authority: %v", err)
 	}
 	if *genOnly {
+		s.authConfig.Debug.GenerateOnly = false
 		if err := saveKeys(s.authConfig); err != nil {
 			log.Fatalf("%s", err)
 		}
@@ -441,6 +442,7 @@ func main() {
 			log.Fatalf("Failed to launch node: %v", err)
 		}
 		if *genOnly {
+			v.Debug.GenerateOnly = false
 			if err := saveKeys(v); err != nil {
 				log.Fatalf("%s", err)
 			}
