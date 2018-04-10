@@ -4,4 +4,4 @@
     state: directory
     owner: katzenpost-authority
     group: katzenpost-authority
-    mode: 0750
+    mode: 0700
