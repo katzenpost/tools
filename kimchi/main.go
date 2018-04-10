@@ -522,7 +522,7 @@ func normalizePaths(cfg interface{}) {
 		cfg.(*sConfig.Config).Server.DataDir = "/var/lib/katzenpost"
 		cfg.(*sConfig.Config).Management.Path = "/var/lib/katzenpost/management_sock"
 	case *aConfig.Config:
-		cfg.(*aConfig.Config).Authority.DataDir = "/var/lib/katzenpost"
+		cfg.(*aConfig.Config).Authority.DataDir = "/var/lib/katzenpost-authority"
 	}
 }
 
