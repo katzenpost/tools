@@ -1,5 +1,5 @@
 - name: install katzen-mix systemd unit file
-  template: src=katzen-mix.j2 dst=/etc/systemd/system/katzen-mix.service
+  template: src=katzen-mix.j2 dest=/etc/systemd/system/katzen-mix.service
   notify:
     - reload systemd
     - restart katzen-mix
