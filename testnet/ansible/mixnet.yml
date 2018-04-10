@@ -2,10 +2,15 @@
 # This playbook deploys the katzenpost mixnet
 
 - name: Build katzenpost binaries locally
-- hosts: 127.0.0.1
+  hosts: Builder
   connection: local
   roles:
     - builder
+  vars:
+    buildTime: "{{ ansible_date_time.iso8601_basic }}"
+    buildDir: "{{ ansible_env.PWD }}/{{ buildTime }}"
+    serverDestPath: "{{ buildDir}}/server"
+    authorityDestPath: "{{ buildDir}}/nonvoting"
 
 - name: Install katzenpost systemd unit on Authority
   remote_user: root

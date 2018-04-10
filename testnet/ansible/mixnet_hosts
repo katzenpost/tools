@@ -11,3 +11,6 @@ katzenpost2     ansible_host=103.104.244.3 idPubKey=id_katzenpost2.pub idPrivKey
 [Providers]
 idefix          ansible_host=217.197.90.63 idPubKey=id_idefix.pub idPrivKey=id_idefix providerConfig=idefix.toml
 ramix           ansible_host=199.119.112.92 idPubKey=id_ramix.pub idPrivKey=id_ramix providerConfig=ramix.toml
+
+[Builder]
+127.0.0.1
