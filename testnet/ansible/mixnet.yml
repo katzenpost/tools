@@ -12,38 +12,27 @@
     serverDestPath: "{{ buildDir}}/server"
     authorityDestPath: "{{ buildDir}}/nonvoting"
 
-- name: Install katzenpost systemd unit on Authority
+- name: Install/Update katzenpost on Authority
   remote_user: root
   hosts: Authority
+  connection: local
   roles:
     - authority
+  vars:
+    binaryPath: "{{ ansible_env.PWD }}/latest/nonvoting"
 
-- name: Install katzenpost systemd unit on Mixes
+- name: Install/Update katzenpost on Mixes
   remote_user: root
   hosts: Mixes
   roles:
     - mix
+  vars:
+    binaryPath: "{{ ansible_env.PWD }}/latest/server"
 
-- name: Install katzenpost systemd unit on Providers
+- name: Install/Update katzenpost on Providers
   remote_user: root
   hosts: Providers
   roles:
     - provider
-
-- name: Update katzenpost on Authority
-  remote_user: root
-  hosts: Authority
-  roles:
-    - authority
-
-- name: Update katzenpost on Mixes
-  remote_user: root
-  hosts: Mixes
-  roles:
-    - mix
-
-- name: Update katzenpost on Providers
-  remote_user: root
-  hosts: Providers
-  roles:
-    - provider
+  vars:
+    binaryPath: "{{ ansible_env.PWD }}/latest/server"
