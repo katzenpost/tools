@@ -4,6 +4,6 @@
     state: directory
 
 - name: update katzen-authority config
-  copy: src="{{ authorityConfig }}" dest=/etc/katenpost/nonvoting.toml owner=root group=root mode=0644
+  copy: src="{{ authorityConfig }}" dest=/etc/katzenpost/nonvoting.toml owner=root group=root mode=0644
   notify:
     - restart katzen-authority

@@ -1,4 +1,4 @@
 - name: update katzen-mix config
-  copy: src="{{ mixConfig }}" dest=/etc/katenpost/katzenpost.toml owner=root group=root mode=0644
+  copy: src="{{ mixConfig }}" dest=/etc/katzenpost/katzenpost.toml owner=root group=root mode=0644
   notify:
     - restart katzen-mix
