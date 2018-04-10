@@ -1,4 +1,6 @@
 ---
+- include: add_katzenpost_authority_user.yml
+- include: install_systemd_unit.yml
 - include: update_binary.yml
 - include: update_config.yml
 - include: update_identity.yml
