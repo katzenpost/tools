@@ -1,3 +1,8 @@
+- name: create /etc/katzenpost
+  file:
+    path: /etc/katzenpost
+    state: directory
+
 - name: update katzen-provider config
   copy: src="{{ providerConfig }}" dest=/etc/katzenpost/katzenpost.toml owner=root group=root mode=0644
   notify:

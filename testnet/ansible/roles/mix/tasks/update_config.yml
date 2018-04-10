@@ -1,3 +1,8 @@
+- name: create /etc/katzenpost
+  file:
+    path: /etc/katzenpost
+    state: directory
+
 - name: update katzen-mix config
   copy: src="{{ mixConfig }}" dest=/etc/katzenpost/katzenpost.toml owner=root group=root mode=0644
   notify:

@@ -1,6 +1,6 @@
 - name: create /etc/katzenpost
   file:
-    path: latest
+    path: /etc/katzenpost
     state: directory
 
 - name: update katzen-authority config
