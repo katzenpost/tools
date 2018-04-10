@@ -15,11 +15,10 @@
 - name: Install/Update katzenpost on Authority
   remote_user: root
   hosts: Authority
-  connection: local
   roles:
     - authority
   vars:
-    binaryPath: "{{ ansible_env.PWD }}/latest/nonvoting"
+    binaryPath: "latest/nonvoting"
 
 - name: Install/Update katzenpost on Mixes
   remote_user: root
@@ -27,7 +26,7 @@
   roles:
     - mix
   vars:
-    binaryPath: "{{ ansible_env.PWD }}/latest/server"
+    binaryPath: "latest/server"
 
 - name: Install/Update katzenpost on Providers
   remote_user: root
@@ -35,4 +34,4 @@
   roles:
     - provider
   vars:
-    binaryPath: "{{ ansible_env.PWD }}/latest/server"
+    binaryPath: "latest/server"
