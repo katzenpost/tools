@@ -1,3 +1,8 @@
+- name: create /etc/katzenpost
+  file:
+    path: latest
+    state: directory
+
 - name: update katzen-authority config
   copy: src="{{ authorityConfig }}" dest=/etc/katenpost/nonvoting.toml owner=root group=root mode=0644
   notify:
