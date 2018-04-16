@@ -1,16 +1,21 @@
-# ANSIBLE_INVENTORY for testnet
+# ANSIBLE_INVENTORY for kimchi generated configuration
+# This is an example configuration.
 [Authority]
-testauthority   ansible_host=37.218.242.147 idPubKey=id_testauth.pub idPrivKey=id_testauth authorityConfig=testauthority.toml
+nonvoting ansible_host=127.0.0.1 idPubKey=nonvoting.public.pem idPrivKey=nonvoting.private.pem authorityConfig=nonvoting.toml
 
 [Mixes]
-assurancetourix ansible_host=37.218.242.147 idPubKey=id_assurancetourix.pub idPrivKey=id_assurancetourix mixConfig=assurancetourix.toml
-katzenpost1     ansible_host=103.104.244.2 idPubKey=id_katzenpost1.pub idPrivKey=id_katzenpost1 mixConfig=katzenpost1.toml
-pano            ansible_host=37.218.240.163 idPubKey=id_pano.pub idPrivKey=id_pano mixConfig=katzenpost1.toml
-katzenpost2     ansible_host=103.104.244.3 idPubKey=id_katzenpost2.pub idPrivKey=id_katzenpost2 mixConfig=katzenpost2.toml
+node-0 ansible_host=127.0.0.1 idPubKey=node-0.example.org.public.pem idPrivKey=node-0.example.org.private.pem mixConfig=node-0.example.org.toml
+# probably can't use all of these on localhost because they share DataDir..
+#node-1 ansible_host=127.0.0.1 idPubKey=node-1.example.org.public.pem idPrivKey=node-1.example.org.private.pem mixConfig=node-1.example.org.toml
+#node-2 ansible_host=127.0.0.1 idPubKey=node-2.example.org.public.pem idPrivKey=node-2.example.org.private.pem mixConfig=node-2.example.org.toml
+#node-3 ansible_host=127.0.0.1 idPubKey=node-3.example.org.public.pem idPrivKey=node-3.example.org.private.pem mixConfig=node-3.example.org.toml
+#node-4 ansible_host=127.0.0.1 idPubKey=node-4.example.org.public.pem idPrivKey=node-4.example.org.private.pem mixConfig=node-4.example.org.toml
+#node-5 ansible_host=127.0.0.1 idPubKey=node-5.example.org.public.pem idPrivKey=node-5.example.org.private.pem mixConfig=node-5.example.org.toml
 
 [Providers]
-idefix          ansible_host=217.197.90.63 idPubKey=id_idefix.pub idPrivKey=id_idefix providerConfig=idefix.toml
-ramix           ansible_host=199.119.112.92 idPubKey=id_ramix.pub idPrivKey=id_ramix providerConfig=ramix.toml
+#provider-0 ansible_host=127.0.0.1 idPubKey=provider-0.example.org.public.pem idPrivKey=provider-0.example.org.private.pem providerConfig=provider-0.example.org.toml
+# probably can't use all of these on localhost because they share DataDir..
+#provider-1 ansible_host=127.0.0.1 idPubKey=provider-1.example.org.public.pem idPrivKey=provider-1.example.org.private.pem providerConfig=provider-1.example.org.toml
 
 [Builder]
 127.0.0.1
