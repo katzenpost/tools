@@ -1,6 +1,7 @@
 ---
 - include: add_katzenpost_authority_user.yml
 - include: create_service_datadir.yml
+- include: create_log_dir.yml
 - include: install_systemd_unit.yml
 - include: update_binary.yml
 - include: update_config.yml
