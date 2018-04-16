@@ -1,9 +1,9 @@
 # handler to handle authority notifications
 - name: reload systemd
-  systemd: state=started name=katzen-authority daemon_reload=yes
+  systemd: state=started name=katzen-authority daemon_reload=yes enabled=yes
 
 - name: start katzen-authority
   service: name=katzen-authority state=started enabled=yes
 
 - name: restart katzen-authority
-  service: name=katzen-authority state=restarted
+  service: name=katzen-authority state=restarted enabled=yes
