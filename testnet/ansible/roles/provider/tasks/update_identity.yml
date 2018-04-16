@@ -1,8 +1,8 @@
 ---
 - name: update provider identity public key
-  copy: src="{{ idPubKey }}" dest=/var/lib/katzenpost/identity.public.pem owner=root group=katzenpost mode=0640
+  copy: src="{{ idPubKey }}" dest=/var/lib/katzenpost/identity.public.pem owner=katzenpost group=katzenpost mode=0600
 
 - name: update provider identity private key
-  copy: src="{{ idPrivKey }}" dest=/var/lib/katzenpost/identity.private.pem owner=root group=katzenpost mode=0640
+  copy: src="{{ idPrivKey }}" dest=/var/lib/katzenpost/identity.private.pem owner=katzenpost group=katzenpost mode=0600
   notify:
     - restart katzen-provider
