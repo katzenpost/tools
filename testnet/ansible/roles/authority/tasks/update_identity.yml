@@ -8,8 +8,3 @@
   copy: src="{{ idPrivKey }}" dest=/var/lib/katzenpost-authority/identity.private.pem owner=katzenpost-authority group=katzenpost-authority mode=0600
   notify:
     - restart katzen-authority
-
-- name: rotate authority link private key
-  copy: src="{{ linkPrivKey }}" dest=/var/lib/katzenpost-authority/link.private.pem owner=katzenpost-authority group=katzenpost-authority mode=0600
-  notify:
-    - restart katzen-authority
