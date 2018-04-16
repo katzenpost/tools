@@ -8,4 +8,4 @@
   template: src=katzenauthority-tailon.j2 dest=/etc/systemd/system/katzenauthority-tailon.service
   notify:
     - reload systemd
-    - restart katzenmix-tailon
+    - restart katzenauthority-tailon
