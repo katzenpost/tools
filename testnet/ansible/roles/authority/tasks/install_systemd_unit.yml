@@ -4,8 +4,8 @@
     - reload systemd
     - start katzen-authority
 
-- name: install katzenmix-tailon systemd unit file
-  template: src=katzenmix-tailon.j2 dest=/etc/systemd/system/katzenmix-tailon.service
+- name: install katzenauthority-tailon systemd unit file
+  template: src=katzenauthority-tailon.j2 dest=/etc/systemd/system/katzenauthority-tailon.service
   notify:
     - reload systemd
     - restart katzenmix-tailon
