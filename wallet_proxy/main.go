@@ -77,17 +77,8 @@ func main() {
 		panic(err)
 	}
 
-	// block until we receive an event... like connected
-	fmt.Printf("even sink %v\n", cfg.Proxy.EventSink)
-	<-cfg.Proxy.EventSink
-
+	// serialize our transaction inside a zcash kaetzpost request message
 	senderAccount := fmt.Sprintf("%s@%s", SenderID, ProviderID)
-	if proxy.IsConnected(senderAccount) {
-		fmt.Printf("%v connected\n", senderAccount)
-	} else {
-		fmt.Printf("%v NOT connected\n", senderAccount)
-	}
-
 	var req = zcashSendRequest{
 		Version: zcashSendVersion,
 		Tx:      hexTx,
@@ -96,15 +87,36 @@ func main() {
 	enc := codec.NewEncoderBytes(&out, &jsonHandle)
 	enc.Encode(req)
 
-	fmt.Printf("sending tx blob of size %d\n", len(hexTx))
-	msgId, err := proxy.SendKaetzchenRequest(senderAccount, ServiceID, ServiceProvider, out, false)
-	if err != nil {
-		panic(err)
+	// block until we receive an event... like connected
+	for {
+		select {
+		case mailproxyEvent := <-cfg.Proxy.EventSink:
+			switch t := mailproxyEvent.(type) {
+			case *event.ConnectionStatusEvent:
+				fmt.Println("ConnectionStatusEvent")
+				if t.IsConnected {
+					fmt.Printf("sending tx blob of size %d\n", len(hexTx))
+					_, err := proxy.SendKaetzchenRequest(senderAccount, ServiceID, ServiceProvider, out, false)
+					if err != nil {
+						panic(err)
+					}
+				} else {
+					proxy.Shutdown()
+					os.Exit(0)
+				}
+			case *event.MessageSentEvent:
+				fmt.Println("MessageSentEvent")
+				proxy.Shutdown()
+				os.Exit(0)
+			case *event.MessageReceivedEvent:
+				fmt.Println("MessageReceivedEvent")
+			case *event.KaetzchenReplyEvent:
+				fmt.Println("KaetzchenReplyEvent")
+			default:
+				fmt.Println("an unhandled case!?")
+				panic("wtf")
+			}
+		}
 	}
-	fmt.Printf("submitted with message ID %x\n", msgId)
-
-	event := <-cfg.Proxy.EventSink
-	fmt.Printf("EVENT: %v %s", event, event.String())
-
-	proxy.Shutdown()
+	fmt.Println("finished!")
 }
