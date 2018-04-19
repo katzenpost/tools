@@ -81,11 +81,17 @@ func main() {
 	}
 
 	cfg.Proxy.EventSink = make(chan event.Event)
-
 	proxy, err := mailproxy.New(cfg)
 	if err != nil {
 		panic(err)
 	}
+
+	defer func() {
+		fmt.Println("before proxy shutdown")
+		proxy.Shutdown()
+		fmt.Println("after proxy shutdown")
+		os.Exit(0)
+	}()
 
 	emptyPayload := []byte{}
 
@@ -106,17 +112,17 @@ func main() {
 						}
 					}
 				} else {
-					proxy.Shutdown()
-					os.Exit(0)
+					return
 				}
 			case *event.MessageSentEvent:
 				fmt.Println("MessageSentEvent")
-				proxy.Shutdown()
-				os.Exit(0)
+				return
 			case *event.MessageReceivedEvent:
 				fmt.Println("MessageReceivedEvent")
+				return
 			case *event.KaetzchenReplyEvent:
 				fmt.Println("KaetzchenReplyEvent")
+				return
 			default:
 				fmt.Println("an unhandled case!?")
 				panic("wtf")
