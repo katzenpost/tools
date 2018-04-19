@@ -1,0 +1,18 @@
+[Proxy]
+  DataDir = "/home/user/.cliclient"
+  NoLaunchListeners = true
+
+[Logging]
+  Disable = false
+  Level = "DEBUG"
+
+[NonvotingAuthority]
+  [NonvotingAuthority.TestAuthority]
+    Address = "127.0.0.1:12483"
+    PublicKey = "YbkiuJk+BkJFKJIX5NRnxkrWm9+32u/wE+3jkzieBHc="
+
+[[Account]]
+  User = "anonymous"
+  Provider = "provider2"
+  ProviderKeyPin = "akHTTDZ4setpOb3QzM1zN6+wMnMhA0VWQnWVooCKcxM="
+  Authority = "TestAuthority"
