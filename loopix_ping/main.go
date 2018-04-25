@@ -1,5 +1,5 @@
-// main.go - Katzenpost ping tool
-// Copyright (C) 2017  David Stainton
+// main.go - Katzenpost client
+// Copyright (C) 2017  Yawning Angel and David Anthony Stainton.
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Affero General Public License as
@@ -20,114 +20,48 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
-	"github.com/katzenpost/mailproxy"
-	"github.com/katzenpost/mailproxy/config"
-	"github.com/katzenpost/mailproxy/event"
-	"github.com/ugorji/go/codec"
+	"github.com/katzenpost/client"
+	"github.com/katzenpost/client/config"
 )
-
-const (
-	CfgEnvVar       = "KATZENPOSTCFG"
-	SenderAccountId = "anonymous@provider2"
-)
-
-var (
-	jsonHandle codec.JsonHandle
-)
-
-type ServiceId struct {
-	Name     string
-	Provider string
-}
-
-func findServices(cfg *config.Config, proxy *mailproxy.Proxy, accountId string, serviceCapability string) []ServiceId {
-	accountMap := cfg.AccountMap()
-	account := accountMap[accountId]
-	providers, err := proxy.ListProviders(account.Authority)
-	if err != nil {
-		panic(err)
-	}
-
-	services := []ServiceId{}
-	for _, provider := range providers {
-		for cap, _ := range provider.Kaetzchen {
-			if cap == serviceCapability {
-				serviceId := ServiceId{
-					Name:     provider.Kaetzchen[cap]["endpoint"].(string),
-					Provider: provider.Name,
-				}
-				services = append(services, serviceId)
-			}
-		}
-	}
-	return services
-}
 
 func main() {
+	cfgFile := flag.String("f", "katzenpost.toml", "Path to the server config file.")
 	genOnly := flag.Bool("g", false, "Generate the keys and exit immediately.")
 	flag.Parse()
 
-	if *genOnly {
-		_, err := config.LoadFile(os.Getenv(CfgEnvVar), *genOnly)
-		if err != nil {
-			panic(err)
+	// Set the umask to something "paranoid".
+	syscall.Umask(0077)
+
+	cfg, err := config.LoadFile(*cfgFile, *genOnly)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to load config file '%v': %v\n", *cfgFile, err)
+		os.Exit(-1)
+	}
+
+	// Setup the signal handling.
+	ch := make(chan os.Signal)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+
+	// Start up the proxy.
+	proxy, err := client.New(cfg)
+	if err != nil {
+		if err == client.ErrGenerateOnly {
+			os.Exit(0)
 		}
-		return
+		fmt.Fprintf(os.Stderr, "Failed to spawn server instance: %v\n", err)
+		os.Exit(-1)
 	}
-	cfg, err := config.LoadFile(os.Getenv(CfgEnvVar), *genOnly)
-	if err != nil {
-		panic(err)
-	}
+	defer proxy.Shutdown()
 
-	cfg.Proxy.EventSink = make(chan event.Event)
-	proxy, err := mailproxy.New(cfg)
-	if err != nil {
-		panic(err)
-	}
-
-	defer func() {
-		fmt.Println("before proxy shutdown")
+	// Halt the proxy gracefully on SIGINT/SIGTERM.
+	go func() {
+		<-ch
 		proxy.Shutdown()
-		fmt.Println("after proxy shutdown")
-		os.Exit(0)
 	}()
 
-	emptyPayload := []byte{}
-
-	// block until we receive an event... like connected
-	for {
-		select {
-		case mailproxyEvent := <-cfg.Proxy.EventSink:
-			switch t := mailproxyEvent.(type) {
-			case *event.ConnectionStatusEvent:
-				fmt.Println("ConnectionStatusEvent")
-				if t.IsConnected {
-					services := findServices(cfg, proxy, SenderAccountId, "loop")
-					for _, service := range services {
-						fmt.Printf("SERVICE %s @ %s\n", service.Name, service.Provider)
-						_, err = proxy.SendKaetzchenRequest(SenderAccountId, service.Name, service.Provider, emptyPayload, true)
-						if err != nil {
-							panic(err)
-						}
-					}
-				} else {
-					return
-				}
-			case *event.MessageSentEvent:
-				fmt.Println("MessageSentEvent")
-				return
-			case *event.MessageReceivedEvent:
-				fmt.Println("MessageReceivedEvent")
-				return
-			case *event.KaetzchenReplyEvent:
-				fmt.Println("KaetzchenReplyEvent")
-				return
-			default:
-				fmt.Println("an unhandled case!?")
-				panic("wtf")
-			}
-		}
-	}
-	fmt.Println("finished!")
+	// Wait for the proxy to explode or be terminated.
+	proxy.Wait()
 }
