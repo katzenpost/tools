@@ -200,21 +200,22 @@ func (s *kimchi) genNodeConfig(isProvider bool, isVoting bool) error {
 
 	if isVoting {
 		peers := []*sConfig.Peer{}
-		for _, peer := range s.votingAuthConfigs[0].Authorities {
-			idKey, err := peer.IdentityPublicKey.MarshalText()
+		for _, peer := range s.votingAuthConfigs {
+			idKey, err := peer.Debug.IdentityKey.PublicKey().MarshalText()
 			if err != nil {
 				return err
 			}
-			linkKey, err := peer.LinkPublicKey.MarshalText()
+
+			linkKey, err := peer.Debug.IdentityKey.PublicKey().ToECDH().MarshalText()
 			if err != nil {
 				return err
 			}
 			p := &sConfig.Peer{
-				Addresses:         peer.Addresses,
+				Addresses:         peer.Authority.Addresses,
 				IdentityPublicKey: string(idKey),
 				LinkPublicKey:     string(linkKey),
 			}
-			if len(peer.Addresses) == 0 {
+			if len(peer.Authority.Addresses) == 0 {
 				panic("wtf")
 			}
 			peers = append(peers, p)
