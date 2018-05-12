@@ -28,6 +28,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/pprof"
 	"sync"
 	"syscall"
 	"time"
@@ -414,11 +415,24 @@ func (s *kimchi) logTailer(prefix, path string) {
 }
 
 func main() {
+
 	var err error
 	var voting = flag.Bool("voting", false, "if set then using voting authorities")
 	var votingNum = flag.Int("votingNum", 10, "the number of voting authorities")
+	var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+	var memprofile = flag.String("memprofile", "", "write memory profile to this file")
 
 	flag.Parse()
+
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+	}
+
+        defer pprof.StopCPUProfile()
 
 	s := newKimchi(basePort)
 
@@ -520,6 +534,15 @@ func main() {
 	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
 	<-ch
 	log.Printf("Received shutdown request.")
+	if *memprofile != "" {
+		f, err := os.Create(*memprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.WriteHeapProfile(f)
+		f.Close()
+	}
+
 	for _, svr := range s.servers {
 		svr.Shutdown()
 	}
