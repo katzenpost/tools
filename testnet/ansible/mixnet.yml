@@ -18,7 +18,7 @@
   roles:
     - authority
   vars:
-    binaryPath: "latest/nonvoting"
+    binaryPath: "latest/voting"
 
 - name: Install/Update katzenpost on Mixes
   remote_user: root

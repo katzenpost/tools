@@ -1,7 +1,9 @@
 # ANSIBLE_INVENTORY for kimchi generated configuration
 # This is an example configuration.
 [Authority]
-nonvoting ansible_host=127.0.0.1 idPubKey=nonvoting.public.pem idPrivKey=nonvoting.private.pem authorityConfig=nonvoting.toml linkPrivKey=nonvoting.link.private.pem
+authority-0 ansible_host=127.0.0.1 idPubKey=authority-0.example.org.public.pem idPrivKey=authority-0.example.org.private.pem authorityConfig=authority-0.example.org.toml linkPrivKey=authority-0.example.org.link.private.pem
+#authority-1 ansible_host=127.0.0.1 idPubKey=authority-1.example.org.public.pem idPrivKey=authority-1.example.org.private.pem authorityConfig=authority-1.example.org.toml linkPrivKey=authority-1.example.org.link.private.pem
+#authority-2 ansible_host=127.0.0.1 idPubKey=authority-2.example.org.public.pem idPrivKey=authority-2.example.org.private.pem authorityConfig=authority-2.example.org.toml linkPrivKey=authority-2.example.org.link.private.pem
 
 [Mixes]
 node-0 ansible_host=127.0.0.1 idPubKey=node-0.example.org.public.pem idPrivKey=node-0.example.org.private.pem mixConfig=node-0.example.org.toml linkPrivKey=node-0.example.org.link.private.pem

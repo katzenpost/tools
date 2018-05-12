@@ -15,11 +15,12 @@ WORKDIR /go/src/github.com/katzenpost/daemons
 # install go dep
 RUN go get -u github.com/golang/dep/cmd/dep
 RUN dep ensure
-WORKDIR /go/src/github.com/katzenpost/daemons/authority/nonvoting
+WORKDIR /go/src/github.com/katzenpost/daemons/authority/voting
 RUN CGO_ENABLED=0 go install
 
 # TODO: pick a base image that includes graphing, etc
 FROM alpine:latest as authority
 # install binaries
 COPY --from=builder /go/bin/nonvoting .
-CMD ["/nonvoting", "-f", "authority.toml"]
+COPY --from=builder /go/bin/voting .
+CMD ["/voting", "-f", "authority.toml"]
