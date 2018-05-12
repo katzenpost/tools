@@ -452,7 +452,7 @@ func main() {
 	var votingNum = flag.Int("votingNum", 10, "the number of voting authorities")
 	var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 	var memprofile = flag.String("memprofile", "", "write memory profile to this file")
-	var genOnly := flag.Bool("g", false, "Generate configuration files and exit immediately.")
+	var genOnly = flag.Bool("g", false, "Generate configuration files and exit immediately.")
 
 	flag.Parse()
 
@@ -543,7 +543,7 @@ func main() {
 			panic(err)
 		}
 		if *genOnly {
-			_, aCfg := range s.votingAuthConfigs {
+			for _, aCfg := range s.votingAuthConfigs {
 				if err := saveKeys(aCfg); err != nil {
 					log.Fatalf("%s", err)
 				}
@@ -628,8 +628,8 @@ func identifier(cfg interface{}) string {
 	switch cfg.(type) {
 	case *sConfig.Config:
 		return cfg.(*sConfig.Config).Server.Identifier
-	case *aConfig.Config:
-		return "nonvoting"
+	case *vConfig.Config:
+		return cfg.(*vConfig.Config).Authority.Identifier
 	default:
 		log.Fatalf("identifier() passed unexpected type")
 		return ""
@@ -641,8 +641,8 @@ func normalizePaths(cfg interface{}) {
 	case *sConfig.Config:
 		cfg.(*sConfig.Config).Server.DataDir = "/var/lib/katzenpost"
 		cfg.(*sConfig.Config).Management.Path = "/var/lib/katzenpost/management_sock"
-	case *aConfig.Config:
-		cfg.(*aConfig.Config).Authority.DataDir = "/var/lib/katzenpost-authority"
+	case *vConfig.Config:
+		cfg.(*vConfig.Config).Authority.DataDir = "/var/lib/katzenpost-authority"
 	}
 }
 
@@ -661,8 +661,8 @@ func saveKeys(cfg interface{}) (err error) {
 		if identityKey, err = eddsa.Load(identityPrivateKeyFile, identityPublicKeyFile, rand.Reader); err != nil {
 			return err
 		}
-	case *aConfig.Config:
-		cfg := cfg.(*aConfig.Config)
+	case *vConfig.Config:
+		cfg := cfg.(*vConfig.Config)
 		if cfg.Debug.IdentityKey != nil {
 			identityKey.FromBytes(cfg.Debug.IdentityKey.Bytes())
 		}
