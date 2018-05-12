@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/pem"
 	"errors"
 	"flag"
 	"fmt"
@@ -33,6 +34,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	"github.com/hpcloud/tail"
 	vServer "github.com/katzenpost/authority/voting/server"
 	vConfig "github.com/katzenpost/authority/voting/server/config"
@@ -43,6 +45,7 @@ import (
 	"github.com/katzenpost/core/thwack"
 	"github.com/katzenpost/mailproxy"
 	pConfig "github.com/katzenpost/mailproxy/config"
+	"github.com/katzenpost/mailproxy/event"
 	nServer "github.com/katzenpost/server"
 	sConfig "github.com/katzenpost/server/config"
 )
@@ -243,6 +246,16 @@ func (s *kimchi) genNodeConfig(isProvider bool, isVoting bool) error {
 			"torv2": []string{"onedaythiswillbea.onion:2323"},
 		}
 
+		loopCfg := new(sConfig.Kaetzchen)
+		loopCfg.Capability = "loop"
+		loopCfg.Endpoint = "+loop"
+		cfg.Provider.Kaetzchen = append(cfg.Provider.Kaetzchen, loopCfg)
+
+		keysvrCfg := new(sConfig.Kaetzchen)
+		keysvrCfg.Capability = "keyserver"
+		keysvrCfg.Endpoint = "+keyserver"
+		cfg.Provider.Kaetzchen = append(cfg.Provider.Kaetzchen, keysvrCfg)
+
 		/*
 			if s.providerIdx == 1 {
 				cfg.Debug.NumProviderWorkers = 10
@@ -319,6 +332,7 @@ func (s *kimchi) newMailProxy(user, provider string, privateKey *ecdh.PrivateKey
 	cfg.Proxy.SMTPAddress = fmt.Sprintf("127.0.0.1:%d", s.lastPort)
 	s.lastPort++
 	cfg.Proxy.DataDir = filepath.Join(s.baseDir, dispName)
+	cfg.Proxy.EventSink = make(chan event.Event)
 
 	// Logging section.
 	cfg.Logging = new(pConfig.Logging)
@@ -335,6 +349,7 @@ func (s *kimchi) newMailProxy(user, provider string, privateKey *ecdh.PrivateKey
 	acc.Provider = provider
 	acc.LinkKey = privateKey
 	acc.IdentityKey = privateKey
+	// acc.StorageKey = privateKey
 	cfg.Account = append(cfg.Account, acc)
 
 	// UpstreamProxy section.
@@ -359,6 +374,22 @@ func (s *kimchi) newMailProxy(user, provider string, privateKey *ecdh.PrivateKey
 		return nil, err
 	}
 
+	go func() {
+		for ev := range cfg.Proxy.EventSink {
+			log.Printf("%v: Event: %+v", dispName, ev)
+			switch e := ev.(type) {
+			case *event.KaetzchenReplyEvent:
+				// Just assume this is a keyserver query for now.
+				if u, k, err := p.ParseKeyQueryResponse(e.Payload); err != nil {
+					log.Printf("%v: Keyserver query failed: %v", dispName, err)
+				} else {
+					log.Printf("%v: Keyserver reply: %v -> %v", dispName, u, k)
+				}
+			default:
+			}
+		}
+	}()
+
 	go s.logTailer(dispName, filepath.Join(cfg.Proxy.DataDir, proxyLogFile))
 
 	return p, nil
@@ -378,17 +409,17 @@ func (s *kimchi) thwackUser(provider *sConfig.Config, user string, pubKey *ecdh.
 		return err
 	}
 
-	if err = c.PrintfLine("ADD_USER %v %v", user, pubKey); err != nil {
-		return err
-	}
-	if _, _, err = c.ReadResponse(int(thwack.StatusOk)); err != nil {
-		return err
-	}
-	if err = c.PrintfLine("QUIT"); err != nil {
-		return err
-	}
-	if _, _, err = c.ReadResponse(int(thwack.StatusOk)); err != nil {
-		return err
+	for _, v := range []string{
+		fmt.Sprintf("ADD_USER %v %v", user, pubKey),
+		fmt.Sprintf("SET_USER_IDENTITY %v %v", user, pubKey),
+		"QUIT",
+	} {
+		if err = c.PrintfLine("%v", v); err != nil {
+			return err
+		}
+		if _, _, err = c.ReadResponse(int(thwack.StatusOk)); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -421,6 +452,7 @@ func main() {
 	var votingNum = flag.Int("votingNum", 10, "the number of voting authorities")
 	var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 	var memprofile = flag.String("memprofile", "", "write memory profile to this file")
+	var genOnly := flag.Bool("g", false, "Generate configuration files and exit immediately.")
 
 	flag.Parse()
 
@@ -430,9 +462,8 @@ func main() {
 			log.Fatal(err)
 		}
 		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
 	}
-
-        defer pprof.StopCPUProfile()
 
 	s := newKimchi(basePort)
 
@@ -482,7 +513,23 @@ func main() {
 		}
 	}
 
+	if *genOnly {
+		for _, v := range s.nodeConfigs {
+			v.Debug.GenerateOnly = true
+		}
+	}
+
 	if *voting {
+		// If generate only - set the debug option for each node.
+		if *genOnly {
+			for _, v := range s.nodeConfigs {
+				v.Debug.GenerateOnly = true
+			}
+			for _, v := range s.votingAuthConfigs {
+				v.Debug.GenerateOnly = true
+			}
+		}
+
 		providerWhitelist, mixWhitelist, err := s.generateVotingWhitelist()
 		if err != nil {
 			panic(err)
@@ -492,8 +539,18 @@ func main() {
 			aCfg.Providers = providerWhitelist
 		}
 		err = s.runVotingAuthorities()
-		if err != nil {
+		if err != nil && !*genOnly {
 			panic(err)
+		}
+		if *genOnly {
+			_, aCfg := range s.votingAuthConfigs {
+				if err := saveKeys(aCfg); err != nil {
+					log.Fatalf("%s", err)
+				}
+				if err := saveCfg(aCfg); err != nil {
+					log.Fatalf("Failed to saveCfg of authority with %s", err)
+				}
+			}
 		}
 
 	} else {
@@ -503,11 +560,20 @@ func main() {
 	// Launch all the nodes.
 	for _, v := range s.nodeConfigs {
 		svr, err := nServer.New(v)
-		if err != nil {
+		if err != nil && !*genOnly {
 			log.Fatalf("Failed to launch node: %v", err)
 		}
-		s.servers = append(s.servers, svr)
+		if *genOnly {
+			v.Debug.GenerateOnly = false
+			if err := saveKeys(v); err != nil {
+				log.Fatalf("%s", err)
+			}
+			if err := saveCfg(v); err != nil {
+				log.Fatalf("%s", err)
+			}
+		}
 
+		s.servers = append(s.servers, svr)
 		go s.logTailer(v.Server.Identifier, filepath.Join(v.Server.DataDir, v.Logging.File))
 	}
 
@@ -556,4 +622,79 @@ func main() {
 	}
 	s.Wait()
 	log.Printf("Terminated.")
+}
+
+func identifier(cfg interface{}) string {
+	switch cfg.(type) {
+	case *sConfig.Config:
+		return cfg.(*sConfig.Config).Server.Identifier
+	case *aConfig.Config:
+		return "nonvoting"
+	default:
+		log.Fatalf("identifier() passed unexpected type")
+		return ""
+	}
+}
+
+func normalizePaths(cfg interface{}) {
+	switch cfg.(type) {
+	case *sConfig.Config:
+		cfg.(*sConfig.Config).Server.DataDir = "/var/lib/katzenpost"
+		cfg.(*sConfig.Config).Management.Path = "/var/lib/katzenpost/management_sock"
+	case *aConfig.Config:
+		cfg.(*aConfig.Config).Authority.DataDir = "/var/lib/katzenpost-authority"
+	}
+}
+
+func saveKeys(cfg interface{}) (err error) {
+	var identityPrivateKeyFile, identityPublicKeyFile string
+	identityKey := new(eddsa.PrivateKey)
+
+	pubFile := fmt.Sprintf("%s.public.pem", identifier(cfg))
+	privFile := fmt.Sprintf("%s.private.pem", identifier(cfg))
+
+	switch cfg.(type) {
+	case *sConfig.Config:
+		cfg := cfg.(*sConfig.Config)
+		identityPrivateKeyFile = filepath.Join(cfg.Server.DataDir, "identity.private.pem")
+		identityPublicKeyFile = filepath.Join(cfg.Server.DataDir, "identity.public.pem")
+		if identityKey, err = eddsa.Load(identityPrivateKeyFile, identityPublicKeyFile, rand.Reader); err != nil {
+			return err
+		}
+	case *aConfig.Config:
+		cfg := cfg.(*aConfig.Config)
+		if cfg.Debug.IdentityKey != nil {
+			identityKey.FromBytes(cfg.Debug.IdentityKey.Bytes())
+		}
+	default:
+		log.Fatalf("privIdKeY() passed unexpected type")
+	}
+
+	const keyType = "ED25519 PRIVATE KEY"
+	blk := &pem.Block{
+		Type:  keyType,
+		Bytes: identityKey.Bytes(),
+	}
+
+	if err = ioutil.WriteFile(privFile, pem.EncodeToMemory(blk), 0600); err != nil {
+		return err
+	}
+	if err = identityKey.PublicKey().ToPEMFile(pubFile); err != nil {
+		return err
+	}
+	return nil
+}
+
+func saveCfg(cfg interface{}) error {
+	fileName := fmt.Sprintf("%s.toml", identifier(cfg))
+	normalizePaths(cfg)
+	log.Printf("saveCfg of %s", fileName)
+	f, err := os.Create(fileName)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	// Serialize the descriptor.
+	enc := toml.NewEncoder(f)
+	return enc.Encode(cfg)
 }
