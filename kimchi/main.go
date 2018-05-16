@@ -28,6 +28,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/pprof"
 	"sync"
 	"syscall"
 	"time"
@@ -125,13 +126,14 @@ func (s *kimchi) genVotingAuthoritiesCfg(numAuthorities int) error {
 		cfg := new(vConfig.Config)
 		cfg.Logging = &vConfig.Logging{
 			Disable: false,
-			File:    "",
+			File:    "katzenpost.log",
 			Level:   "DEBUG",
 		}
 		cfg.Parameters = parameters
 		cfg.Authority = &vConfig.Authority{
-			Addresses: []string{fmt.Sprintf("127.0.0.1:%d", s.lastPort)},
-			DataDir:   filepath.Join(s.baseDir, fmt.Sprintf("authority%d", i)),
+			Identifier: fmt.Sprintf("authority-%v.example.org", i),
+			Addresses:  []string{fmt.Sprintf("127.0.0.1:%d", s.lastPort)},
+			DataDir:    filepath.Join(s.baseDir, fmt.Sprintf("authority%d", i)),
 		}
 		s.lastPort += 1
 		privateIdentityKey, err := eddsa.NewKeypair(rand.Reader)
@@ -199,21 +201,22 @@ func (s *kimchi) genNodeConfig(isProvider bool, isVoting bool) error {
 
 	if isVoting {
 		peers := []*sConfig.Peer{}
-		for _, peer := range s.votingAuthConfigs[0].Authorities {
-			idKey, err := peer.IdentityPublicKey.MarshalText()
+		for _, peer := range s.votingAuthConfigs {
+			idKey, err := peer.Debug.IdentityKey.PublicKey().MarshalText()
 			if err != nil {
 				return err
 			}
-			linkKey, err := peer.LinkPublicKey.MarshalText()
+
+			linkKey, err := peer.Debug.IdentityKey.PublicKey().ToECDH().MarshalText()
 			if err != nil {
 				return err
 			}
 			p := &sConfig.Peer{
-				Addresses:         peer.Addresses,
+				Addresses:         peer.Authority.Addresses,
 				IdentityPublicKey: string(idKey),
 				LinkPublicKey:     string(linkKey),
 			}
-			if len(peer.Addresses) == 0 {
+			if len(peer.Authority.Addresses) == 0 {
 				panic("wtf")
 			}
 			peers = append(peers, p)
@@ -293,6 +296,7 @@ func (s *kimchi) runVotingAuthorities() error {
 		if err != nil {
 			return err
 		}
+		go s.logTailer(vCfg.Authority.Identifier, filepath.Join(vCfg.Authority.DataDir, vCfg.Logging.File))
 		s.servers = append(s.servers, server)
 	}
 	return nil
@@ -411,11 +415,24 @@ func (s *kimchi) logTailer(prefix, path string) {
 }
 
 func main() {
+
 	var err error
 	var voting = flag.Bool("voting", false, "if set then using voting authorities")
 	var votingNum = flag.Int("votingNum", 10, "the number of voting authorities")
+	var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+	var memprofile = flag.String("memprofile", "", "write memory profile to this file")
 
 	flag.Parse()
+
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+	}
+
+        defer pprof.StopCPUProfile()
 
 	s := newKimchi(basePort)
 
@@ -517,6 +534,15 @@ func main() {
 	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
 	<-ch
 	log.Printf("Received shutdown request.")
+	if *memprofile != "" {
+		f, err := os.Create(*memprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.WriteHeapProfile(f)
+		f.Close()
+	}
+
 	for _, svr := range s.servers {
 		svr.Shutdown()
 	}
