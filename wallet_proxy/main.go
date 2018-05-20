@@ -66,7 +66,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	session, err := _client.NewSession()
+	err = _client.NewSession()
 	if err != nil {
 		panic(err)
 	}
@@ -82,13 +82,13 @@ func main() {
 	enc.Encode(req)
 
 	// find a zcash proxy service
-	zcashService, err := session.GetService(zcashService)
+	zcashService, err := _client.GetService(zcashService)
 	if err != nil {
 		panic(err)
 	}
 
 	// send the zcash transaction
-	err = session.SendUnreliable(zcashService.Name, zcashService.Provider, zcashRequest)
+	err = _client.SendUnreliable(zcashService.Name, zcashService.Provider, zcashRequest)
 	if err != nil {
 		panic(err)
 	}
