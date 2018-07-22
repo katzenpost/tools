@@ -105,7 +105,7 @@ func NewShell(proxy *mailproxy.Proxy, cfg *config.Config) *Shell {
 					fmt.Sprintf(messageTemplate,
 						date, msgSubject, fromIdentity,
 						toIdentity, msgBody)
-				err = proxy.SendMessage(fromIdentity, toIdentity, []byte(testMessage))
+				_, err = proxy.SendMessage(fromIdentity, toIdentity, []byte(testMessage))
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "SendMessage failed: %v\n", err)
 					os.Exit(-1)
@@ -231,7 +231,7 @@ func NewShell(proxy *mailproxy.Proxy, cfg *config.Config) *Shell {
 			// XXX sanitize time
 			date := "Mon, 42 Jan 4242 42:42:42 +0100"
 			testMessage := fmt.Sprintf(messageTemplate, date, msgSubject, fromIdentity, toIdentity, msgBody)
-			err = proxy.SendMessage(fromIdentity, toIdentity, []byte(testMessage))
+			_, err = proxy.SendMessage(fromIdentity, toIdentity, []byte(testMessage))
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "SendMessage failed: %v\n", err)
 				os.Exit(-1)
