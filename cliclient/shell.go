@@ -135,6 +135,7 @@ func NewShell(proxy *mailproxy.Proxy, cfg *config.Config) *Shell {
 		Func: func(c *ishell.Context) {
 			for identity := range cfg.Recipients {
 				if proxy.IsConnected(identity) {
+					currIdent = identity
 					fmt.Printf("%v connected\n", identity)
 				}
 			}
