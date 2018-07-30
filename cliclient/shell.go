@@ -77,7 +77,6 @@ func NewShell(proxy *mailproxy.Proxy, cfg *config.Config) *Shell {
 				recipientKey, err := proxy.GetRecipient(identity)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "GetRecipient failed: %v\n", err)
-					os.Exit(-1)
 				}
 				c.Println(recipientKey)
 			},
@@ -108,7 +107,6 @@ func NewShell(proxy *mailproxy.Proxy, cfg *config.Config) *Shell {
 				_, err = proxy.SendMessage(fromIdentity, toIdentity, []byte(testMessage))
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "SendMessage failed: %v\n", err)
-					os.Exit(-1)
 				}
 			},
 		})
@@ -189,7 +187,6 @@ func NewShell(proxy *mailproxy.Proxy, cfg *config.Config) *Shell {
 			err := proxy.SetRecipient(username, pubKey)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "SetRecipient failed: %v\n", err)
-				os.Exit(-1)
 			}
 		},
 	})
@@ -234,7 +231,6 @@ func NewShell(proxy *mailproxy.Proxy, cfg *config.Config) *Shell {
 			_, err = proxy.SendMessage(fromIdentity, toIdentity, []byte(testMessage))
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "SendMessage failed: %v\n", err)
-				os.Exit(-1)
 			}
 		},
 	})
