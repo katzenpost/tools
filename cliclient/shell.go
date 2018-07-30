@@ -173,6 +173,32 @@ func NewShell(proxy *mailproxy.Proxy, cfg *config.Config) *Shell {
 		},
 	})
 
+	// register a function for "lookup" command.
+	shell.ishell.AddCmd(&ishell.Cmd{
+		Name: "identity",
+		Help: "query a provider for an identity",
+		Func: func(c *ishell.Context) {
+			c.Print("Identity: ")
+			identity := c.ReadLine()
+			c.Print("Fetching %v %v", currIdent, identity)
+			if r, err := proxy.QueryKeyFromProvider(currIdent, identity); err == nil {
+				for {
+					c.Println("Reading EventSink")
+					evt := <-cfg.Proxy.EventSink
+					c.Printf("Event: %v\n", evt.String())
+				}
+				if id, pubKey, err := proxy.ParseKeyQueryResponse(r); err == nil {
+					c.Printf("Identity: %s|%v", id, pubKey)
+				} else {
+					c.Printf("ParseKeyQueryResponse failed: %v", err)
+				}
+			} else {
+				c.Printf("QueryKeyFromProvider failed: %v", err)
+			}
+		},
+	})
+
+
 	// register a function for "add" command.
 	shell.ishell.AddCmd(&ishell.Cmd{
 		Name: "add",
