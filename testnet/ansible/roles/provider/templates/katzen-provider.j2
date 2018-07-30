@@ -1,0 +1,16 @@
+[Unit]
+Description=Katzenpost Provider
+After=network.target
+
+[Service]
+Type=simple
+User=katzenpost
+WorkingDirectory=/var/lib/katzenpost
+ExecStart=/usr/bin/katzenpost -f /etc/katzenpost/katzenpost.toml
+PrivateTmp=yes
+NoNewPrivileges=yes
+# RestartSec=5
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

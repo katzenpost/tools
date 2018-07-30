@@ -1,0 +1,10 @@
+- name: Add katzenpost-authority group 
+  group:
+    name: katzenpost-authority
+    state: present
+
+- name: Add katzenpost-authority user
+  user:
+    create_home: false
+    name: katzenpost-authority
+    group: katzenpost-authority

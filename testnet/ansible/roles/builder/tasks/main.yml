@@ -1,0 +1,47 @@
+---
+# XXX: clean this up.
+- name: create build output directory
+  file:
+    path: "{{ buildDir }}"
+    state: directory
+
+- name: build authority
+  command: docker build -f ../authority.dockerfile -t authority .
+
+- name: create authority docker image
+  command: docker create --name {{ buildTime }}-authority authority
+
+- name: extract authority binary from docker image
+  command: docker cp {{ buildTime }}-authority:nonvoting {{ authorityDestPath }}
+
+- name: remove docker image
+  command: docker rm {{ buildTime }}-authority
+
+- name: build server
+  command: docker build -f ../server.dockerfile -t server .
+
+- name: create server docker image
+  command: docker create --name {{ buildTime }}-server server
+
+- name: extract server binary from docker image
+  command: docker cp {{ buildTime }}-server:server {{ serverDestPath }}
+
+- name: remove docker image
+  command: docker rm {{ buildTime }}-server
+
+- name: ensure latest directory exists
+  file:
+    path: latest
+    state: directory
+
+- name: symlink latest server build
+  file:
+    src: "{{ serverDestPath }}"
+    dest: latest/server
+    state: link
+
+- name: symlink latest authority build
+  file:
+    src: "{{ authorityDestPath }}"
+    dest: latest/nonvoting
+    state: link

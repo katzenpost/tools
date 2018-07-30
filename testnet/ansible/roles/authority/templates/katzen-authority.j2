@@ -1,0 +1,16 @@
+[Unit]
+Description=Katzenpost Authority
+After=network.target
+
+[Service]
+Type=simple
+User=katzenpost-authority
+WorkingDirectory=/var/lib/katzenpost-authority
+ExecStart=/usr/bin/katzenpost-authority -f /etc/katzenpost-authority/authority.toml
+PrivateTmp=yes
+NoNewPrivileges=yes
+# RestartSec=5
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
