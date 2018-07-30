@@ -1,0 +1,9 @@
+- name: create /etc/katzenpost-authority
+  file:
+    path: /etc/katzenpost-authority
+    state: directory
+
+- name: update katzen-authority config
+  copy: src="{{ authorityConfig }}" dest=/etc/katzenpost-authority/authority.toml owner=root group=root mode=0644
+  notify:
+    - restart katzen-authority
