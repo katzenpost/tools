@@ -20,11 +20,13 @@ import (
 	"fmt"
 	"os"
 
+	"encoding/hex"
 	"github.com/abiosoft/ishell"
 	"github.com/fatih/color"
 	"github.com/katzenpost/core/crypto/ecdh"
 	"github.com/katzenpost/mailproxy"
 	"github.com/katzenpost/mailproxy/config"
+	"github.com/katzenpost/mailproxy/event"
 )
 
 const (
@@ -58,6 +60,32 @@ func NewShell(proxy *mailproxy.Proxy, cfg *config.Config) *Shell {
 	}
 	var err error
 	var currIdent string = ""
+	go func() {
+		for {
+			select {
+			case <-proxy.HaltCh():
+				return
+
+			case evt := <-cfg.Proxy.EventSink:
+				shell.ishell.Printf("Got Event: %s\n", evt)
+				switch e := evt.(type) {
+				case *event.KaetzchenReplyEvent:
+					if e.Err == nil {
+						if id, pubKey, err := proxy.ParseKeyQueryResponse(e.Payload); err == nil {
+							shell.ishell.Printf("Identity: %s|%s\n", id, pubKey)
+						} else {
+							shell.ishell.Printf("Failed to parse event: %v\n", err)
+						}
+					} else {
+						shell.ishell.Printf("KaetzchenReply[%v]: %v failed: %v\n",
+						e.AccountID, hex.EncodeToString(e.MessageID), e.Err)
+					}
+				}
+			}
+		}
+	}()
+
+
 	magenta := color.New(color.FgMagenta).SprintFunc()
 	shell.ishell.Println(magenta("KatzenShell"))
 	shell.ishell.SetPrompt(magenta(">>> "))
@@ -181,20 +209,11 @@ func NewShell(proxy *mailproxy.Proxy, cfg *config.Config) *Shell {
 		Func: func(c *ishell.Context) {
 			c.Print("Identity: ")
 			identity := c.ReadLine()
-			c.Print("Fetching %v %v", currIdent, identity)
+			c.Printf("Fetching %v %v\n", currIdent, identity)
 			if r, err := proxy.QueryKeyFromProvider(currIdent, identity); err == nil {
-				for {
-					c.Println("Reading EventSink")
-					evt := <-cfg.Proxy.EventSink
-					c.Printf("Event: %v\n", evt.String())
-				}
-				if id, pubKey, err := proxy.ParseKeyQueryResponse(r); err == nil {
-					c.Printf("Identity: %s|%v", id, pubKey)
-				} else {
-					c.Printf("ParseKeyQueryResponse failed: %v", err)
-				}
+				c.Printf("Query ID tag: %v\n", hex.EncodeToString(r))
 			} else {
-				c.Printf("QueryKeyFromProvider failed: %v", err)
+				c.Printf("QueryKeyFromProvider failed: %v\n", err)
 			}
 		},
 	})

@@ -24,6 +24,7 @@ import (
 
 	"github.com/katzenpost/mailproxy"
 	"github.com/katzenpost/mailproxy/config"
+	"github.com/katzenpost/mailproxy/event"
 )
 
 func main() {
@@ -41,6 +42,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Failed to load config file '%v': %v\n", *cfgFile, err)
 		os.Exit(-1)
 	}
+	// create an event channel to receive events on
+	cfg.Proxy.EventSink = make(chan event.Event)
 
 	// Start up the proxy.
 	fmt.Printf("Starting mailproxy...\n")
