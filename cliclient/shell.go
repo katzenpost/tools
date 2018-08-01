@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 
-	"encoding/hex"
 	"github.com/abiosoft/ishell"
 	"github.com/fatih/color"
 	"github.com/katzenpost/core/crypto/ecdh"
@@ -65,21 +64,29 @@ func NewShell(proxy *mailproxy.Proxy, cfg *config.Config) *Shell {
 			select {
 			case <-proxy.HaltCh():
 				return
-
 			case evt := <-cfg.Proxy.EventSink:
-				shell.ishell.Printf("Got Event: %s\n", evt)
+				c := shell.ishell
 				switch e := evt.(type) {
 				case *event.KaetzchenReplyEvent:
 					if e.Err == nil {
 						if id, pubKey, err := proxy.ParseKeyQueryResponse(e.Payload); err == nil {
-							shell.ishell.Printf("Identity: %s|%s\n", id, pubKey)
-						} else {
-							shell.ishell.Printf("Failed to parse event: %v\n", err)
+							c.Printf("Identity: %s %s\n", id, pubKey)
 						}
-					} else {
-						shell.ishell.Printf("KaetzchenReply[%v]: %v failed: %v\n",
-						e.AccountID, hex.EncodeToString(e.MessageID), e.Err)
 					}
+					c.Printf("Failed to parse KaetzchenReplyEvent: %v\n", e)
+				case *event.ConnectionStatusEvent:
+					c.Println(e)
+					if e.IsConnected {
+						currIdent = e.AccountID
+					} else {
+						currIdent = ""
+					}
+				case *event.MessageSentEvent:
+					c.Println(e)
+				case *event.MessageReceivedEvent:
+					c.Println(e)
+				default:
+					c.Printf("Received unknown event type: %v\n", e)
 				}
 			}
 		}
@@ -89,58 +96,6 @@ func NewShell(proxy *mailproxy.Proxy, cfg *config.Config) *Shell {
 	magenta := color.New(color.FgMagenta).SprintFunc()
 	shell.ishell.Println(magenta("KatzenShell"))
 	shell.ishell.SetPrompt(magenta(">>> "))
-	for identity, _ := range cfg.Recipients {
-		c := ishell.Cmd{
-			Name: identity,
-			Help: fmt.Sprintf("use %s", identity),
-			Func: func(c *ishell.Context) {
-				currIdent = identity
-			},
-		}
-		c.AddCmd(&ishell.Cmd{
-			Name: "identity",
-			Help: "recipient identity",
-			Func: func(c *ishell.Context) {
-				c.Print("Identity: ")
-				recipientKey, err := proxy.GetRecipient(identity)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "GetRecipient failed: %v\n", err)
-				}
-				c.Println(recipientKey)
-			},
-		})
-
-		c.AddCmd(&ishell.Cmd{
-			Name: "send",
-			Help: "send message",
-			Func: func(c *ishell.Context) {
-				fromIdentity := ""
-				if currIdent != "" {
-					fromIdentity = currIdent
-				} else {
-					c.Print("From: ")
-					fromIdentity = c.ReadLine()
-				}
-				toIdentity := identity
-				c.Print("Subject: ")
-				msgSubject := c.ReadLine()
-				c.Print("Message: (ctrl-D to end)\n")
-				msgBody := c.ReadMultiLines("\n.\n")
-				// XXX sanitize time
-				date := "Mon, 42 Jan 4242 42:42:42 +0100"
-				testMessage :=
-					fmt.Sprintf(messageTemplate,
-						date, msgSubject, fromIdentity,
-						toIdentity, msgBody)
-				_, err = proxy.SendMessage(fromIdentity, toIdentity, []byte(testMessage))
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "SendMessage failed: %v\n", err)
-				}
-			},
-		})
-
-		shell.ishell.AddCmd(&c)
-	}
 
 	// register a function for "list" command.
 	shell.ishell.AddCmd(&ishell.Cmd{
@@ -163,7 +118,6 @@ func NewShell(proxy *mailproxy.Proxy, cfg *config.Config) *Shell {
 		Func: func(c *ishell.Context) {
 			for identity := range cfg.Recipients {
 				if proxy.IsConnected(identity) {
-					currIdent = identity
 					fmt.Printf("%v connected\n", identity)
 				}
 			}
@@ -178,7 +132,6 @@ func NewShell(proxy *mailproxy.Proxy, cfg *config.Config) *Shell {
 			// test ReceivePeek method.
 			msg, err := proxy.ReceivePeek(currIdent)
 			if err == nil {
-				c.Print(showHeader(msg))
 				c.Printf("%s\n", msg.Payload)
 			} else {
 				fmt.Fprintf(os.Stderr, "ReceivePeek failed: %v\n", err)
@@ -194,7 +147,6 @@ func NewShell(proxy *mailproxy.Proxy, cfg *config.Config) *Shell {
 			// test ReceivePop method.
 			msg, err := proxy.ReceivePop(currIdent)
 			if err == nil {
-				c.Print(showHeader(msg))
 				c.Printf("%s\n", msg.Payload)
 			} else {
 				fmt.Fprintf(os.Stderr, "ReceivePeek failed: %v\n", err)
@@ -209,10 +161,8 @@ func NewShell(proxy *mailproxy.Proxy, cfg *config.Config) *Shell {
 		Func: func(c *ishell.Context) {
 			c.Print("Identity: ")
 			identity := c.ReadLine()
-			c.Printf("Fetching %v %v\n", currIdent, identity)
-			if r, err := proxy.QueryKeyFromProvider(currIdent, identity); err == nil {
-				c.Printf("Query ID tag: %v\n", hex.EncodeToString(r))
-			} else {
+			c.Printf("Looking up identity for %v\n", identity)
+			if _, err := proxy.QueryKeyFromProvider(currIdent, identity); err != nil {
 				c.Printf("QueryKeyFromProvider failed: %v\n", err)
 			}
 		},
@@ -266,7 +216,12 @@ func NewShell(proxy *mailproxy.Proxy, cfg *config.Config) *Shell {
 				fromIdentity = c.ReadLine()
 			}
 			c.Print("To: ")
-			toIdentity := c.ReadLine()
+			rpmap := proxy.ListRecipients()
+			r := make([]string, 0, len(rpmap))
+			for identity, _:= range rpmap {
+				r = append(r, identity)
+			}
+			toIdentity := r[c.MultiChoice(r, "Choose recipient:")]
 			c.Print("Subject: ")
 			msgSubject := c.ReadLine()
 			c.Print("Message: (ctrl-D to end)\n")
