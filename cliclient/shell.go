@@ -32,6 +32,8 @@ const (
 	messageTemplate string = "MIME-Version: 1.0\nDate: %v\nSubject: %v\nFrom: %v\nTo: %v\nContent-Type: text/plain; charset=\"UTF-8\"\n\n%v"
 )
 
+var currIdent string = ""
+
 func showHeader(m *mailproxy.Message) string {
 	return fmt.Sprintf("SenderID %v\nSenderKey %v\nMessageID %s", m.SenderKey.String(), m.MessageID, m.Payload)
 }
@@ -58,39 +60,7 @@ func NewShell(proxy *mailproxy.Proxy, cfg *config.Config) *Shell {
 		proxy:  proxy,
 	}
 	var err error
-	var currIdent string = ""
-	go func() {
-		for {
-			select {
-			case <-proxy.HaltCh():
-				return
-			case evt := <-cfg.Proxy.EventSink:
-				c := shell.ishell
-				switch e := evt.(type) {
-				case *event.KaetzchenReplyEvent:
-					if e.Err == nil {
-						if id, pubKey, err := proxy.ParseKeyQueryResponse(e.Payload); err == nil {
-							c.Printf("Identity: %s %s\n", id, pubKey)
-						}
-					}
-					c.Printf("Failed to parse KaetzchenReplyEvent: %v\n", e)
-				case *event.ConnectionStatusEvent:
-					c.Println(e)
-					if e.IsConnected {
-						currIdent = e.AccountID
-					} else {
-						currIdent = ""
-					}
-				case *event.MessageSentEvent:
-					c.Println(e)
-				case *event.MessageReceivedEvent:
-					c.Println(e)
-				default:
-					c.Printf("Received unknown event type: %v\n", e)
-				}
-			}
-		}
-	}()
+	go eventListener(proxy, cfg, shell)
 
 	magenta := color.New(color.FgMagenta).SprintFunc()
 	shell.ishell.Println(magenta("KatzenShell"))
@@ -255,4 +225,37 @@ func NewShell(proxy *mailproxy.Proxy, cfg *config.Config) *Shell {
 		},
 	})
 	return shell
+}
+
+func eventListener(proxy *mailproxy.Proxy, cfg *config.Config, shell *Shell) {
+	for {
+		select {
+		case <-proxy.HaltCh():
+			return
+		case evt := <-cfg.Proxy.EventSink:
+			c := shell.ishell
+			switch e := evt.(type) {
+			case *event.KaetzchenReplyEvent:
+				if e.Err == nil {
+					if id, pubKey, err := proxy.ParseKeyQueryResponse(e.Payload); err == nil {
+						c.Printf("Identity: %s %s\n", id, pubKey)
+					}
+				}
+				c.Printf("Failed to parse KaetzchenReplyEvent: %v\n", e)
+			case *event.ConnectionStatusEvent:
+				c.Println(e)
+				if e.IsConnected {
+					currIdent = e.AccountID
+				} else {
+					currIdent = ""
+				}
+			case *event.MessageSentEvent:
+				c.Println(e)
+			case *event.MessageReceivedEvent:
+				c.Println(e)
+			default:
+				c.Printf("Received unknown event type: %v\n", e)
+			}
+		}
+	}
 }
