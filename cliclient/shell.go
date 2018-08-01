@@ -92,7 +92,6 @@ func NewShell(proxy *mailproxy.Proxy, cfg *config.Config) *Shell {
 		}
 	}()
 
-
 	magenta := color.New(color.FgMagenta).SprintFunc()
 	shell.ishell.Println(magenta("KatzenShell"))
 	shell.ishell.SetPrompt(magenta(">>> "))
@@ -168,7 +167,6 @@ func NewShell(proxy *mailproxy.Proxy, cfg *config.Config) *Shell {
 		},
 	})
 
-
 	// register a function for "add" command.
 	shell.ishell.AddCmd(&ishell.Cmd{
 		Name: "add",
@@ -215,10 +213,13 @@ func NewShell(proxy *mailproxy.Proxy, cfg *config.Config) *Shell {
 				c.Print("From: ")
 				fromIdentity = c.ReadLine()
 			}
-			c.Print("To: ")
 			rpmap := proxy.ListRecipients()
+			if len(rpmap) == 0 {
+				c.Println("No recipients found, \"add\" some")
+				return
+			}
 			r := make([]string, 0, len(rpmap))
-			for identity, _:= range rpmap {
+			for identity, _ := range rpmap {
 				r = append(r, identity)
 			}
 			toIdentity := r[c.MultiChoice(r, "Choose recipient:")]
