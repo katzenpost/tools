@@ -18,8 +18,5 @@
   Authority = "TestAuthority"
 
 [Recipients]
-  "david@idefix" = "hxJJ/KAuQpktcVxO241HFPx8WOj1QnAGLpHld+zvDEQ="
-  "masala@ramix" = "jnJIpfVNCXBMhQv/gKGYdWZenHqoroN0bExYaA8GKVg="
-  "blackhole@idefix" = "UZ/VW8flXHMN8RGBrAVauTJNABfDFPv6egJ8v6YGu2A="
-  "blackhole@ramix" = "gjqrL3UMKz6rWATCvJdnqiNmoy5LnJ7emjAjnFJCviM="
+  "masala@idefix" = "Ga9I+/1GpwcCj+TzkK+r2ZYpCkB2b8Y6me4Bfk4t6Fs="
   # add more here ?
