@@ -239,6 +239,32 @@ func NewShell(proxy *mailproxy.Proxy, cfg *config.Config) *Shell {
 		},
 	})
 
+	shell.ishell.AddCmd(&ishell.Cmd{
+		Name: "sendKaetzchen",
+		Help: "send message to kaetzchen",
+		Func: func(c *ishell.Context) {
+			fromIdentity := ""
+			if currIdent != "" {
+				fromIdentity = currIdent
+			} else {
+				c.Print("From: ")
+				fromIdentity = c.ReadLine()
+			}
+			c.Print("ServiceID: ")
+			serviceID := c.ReadLine()
+			c.Print("ProviderID: ")
+			providerID := c.ReadLine()
+			wantResponse := true
+			c.Print("Payload: (ctrl-D to end)\n")
+			payload := c.ReadMultiLines("\n.\n")
+			_, err := proxy.SendKaetzchenRequest(fromIdentity, serviceID, providerID, []byte(payload), wantResponse)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "SendMessage failed: %v\n", err)
+				os.Exit(-1)
+			}
+		},
+	})
+
 	// register a function for "pull" command.
 	shell.ishell.AddCmd(&ishell.Cmd{
 		Name: "pull",
