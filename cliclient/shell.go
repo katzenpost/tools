@@ -254,10 +254,11 @@ func NewShell(proxy *mailproxy.Proxy, cfg *config.Config) *Shell {
 			serviceID := c.ReadLine()
 			c.Print("ProviderID: ")
 			providerID := c.ReadLine()
-			wantResponse := true
+			c.Print("want response? y/n: ")
+			wantResponse := c.ReadLine()
 			c.Print("Payload: (ctrl-D to end)\n")
 			payload := c.ReadMultiLines("\n.\n")
-			_, err := proxy.SendKaetzchenRequest(fromIdentity, serviceID, providerID, []byte(payload), wantResponse)
+			_, err := proxy.SendKaetzchenRequest(fromIdentity, serviceID, providerID, []byte(payload), wantResponse == "y")
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "SendMessage failed: %v\n", err)
 				os.Exit(-1)
