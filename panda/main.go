@@ -69,7 +69,7 @@ func main() {
 	}
 	c.WaitForPKIDocument()
 
-	//serviceDesc, err := c.GetService(pandaService)
+	// XXX make this CLI options?
 	pandaServerRecipient := "+panda"
 	pandaProvider := "provider1"
 
@@ -84,7 +84,5 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("GOT REPLY: %s", string(reply))
-
-	//c.Wait()
+	fmt.Printf("GOT REPLY: %s\n", string(reply))
 }
