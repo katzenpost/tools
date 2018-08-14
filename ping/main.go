@@ -51,21 +51,20 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	err = c.NewSession()
+	s, err := c.NewSession()
 	if err != nil {
 		panic(err)
 	}
-	c.WaitForPKIDocument()
-	serviceDesc, err := c.GetService(pingService)
+	s.WaitForPKIDocument()
+	serviceDesc, err := s.GetService(pingService)
 	if err != nil {
 		panic(err)
 	}
 	wantReply := true
 
-	msgRef, err := c.SendKaetzchenQuery(serviceDesc.Name, serviceDesc.Provider, []byte("hello"), wantReply)
+	msgRef, err := s.SendKaetzchenQuery(serviceDesc.Name, serviceDesc.Provider, []byte("hello"), wantReply)
 	if err != nil {
 		panic(err)
 	}
-	c.WaitForReply(msgRef)
-	//c.Wait()
+	s.WaitForReply(msgRef)
 }
