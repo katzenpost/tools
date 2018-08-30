@@ -17,6 +17,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"os/user"
@@ -28,11 +29,16 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 2 {
-		panic("Must specify the username as the only commandline argument.")
-	}
+	accountName := flag.String("name", "", "account name to register")
+	registerWithOnion := flag.Bool("onion", false, "register using the Tor onion service")
+	socksNet := flag.String("torSocksNet", "tcp", "tor SOCKS network (e.g. tcp or unix)")
+	socksAddr := flag.String("torSocksAddr", "127.0.0.1:9150", "tor SOCKS address (e.g. 127.0.0.1:9050")
+	flag.Parse()
 
-	accountName := os.Args[1]
+	if len(*accountName) == 0 {
+		flag.Usage()
+		return
+	}
 
 	// 1. ensure ~/.mailproxy config directory doesn't already exist
 	usr, err := user.Current()
@@ -48,14 +54,28 @@ func main() {
 	}
 
 	// 2. generate mailproxy key material and configuration
-	linkKey, identityKey, err := mailproxy.GenerateConfig(accountName, mailproxyDir)
+	linkKey, identityKey, err := mailproxy.GenerateConfig(*accountName, mailproxyDir)
 	if err != nil {
 		panic(err)
 	}
 
 	// 3. perform registration with the mixnet Provider
-	c := client.New(mailproxy.RegistrationAddr, nil)
-	err = c.RegisterAccountWithIdentityAndLinkKey(accountName, linkKey, identityKey)
+	var options *client.Options = nil
+	registrationAddr := mailproxy.RegistrationAddr
+	if *registerWithOnion {
+		registrationAddr = mailproxy.OnionRegistrationAddr
+		options = &client.Options{
+			Scheme:       "http",
+			UseSocks:     true,
+			SocksNetwork: *socksNet,
+			SocksAddress: *socksAddr,
+		}
+	}
+	c, err := client.New(registrationAddr, options)
+	if err != nil {
+		panic(err)
+	}
+	err = c.RegisterAccountWithIdentityAndLinkKey(*accountName, linkKey, identityKey)
 	if err != nil {
 		panic(err)
 	}
