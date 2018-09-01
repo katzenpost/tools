@@ -24,6 +24,7 @@ import (
 	"path"
 
 	"github.com/katzenpost/core/utils"
+	"github.com/katzenpost/playground"
 	client "github.com/katzenpost/registration_client"
 	"github.com/katzenpost/registration_client/mailproxy"
 )
@@ -61,9 +62,9 @@ func main() {
 
 	// 3. perform registration with the mixnet Provider
 	var options *client.Options = nil
-	registrationAddr := mailproxy.RegistrationAddr
+	registrationAddr := playground.RegistrationAddr
 	if *registerWithOnion {
-		registrationAddr = mailproxy.OnionRegistrationAddr
+		registrationAddr = playground.OnionRegistrationAddr
 		options = &client.Options{
 			Scheme:       "http",
 			UseSocks:     true,
