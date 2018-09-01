@@ -54,7 +54,7 @@ func main() {
 	}
 
 	// 2. generate mailproxy key material and configuration
-	linkKey, identityKey, err := mailproxy.GenerateConfig(*accountName, mailproxyDir)
+	linkKey, identityKey, err := mailproxy.GenerateConfig(*accountName, mailproxyDir, *registerWithOnion, *socksNet, *socksAddr)
 	if err != nil {
 		panic(err)
 	}
