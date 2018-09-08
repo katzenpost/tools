@@ -34,6 +34,7 @@ func main() {
 	registerWithOnion := flag.Bool("onion", false, "register using the Tor onion service")
 	socksNet := flag.String("torSocksNet", "tcp", "tor SOCKS network (e.g. tcp or unix)")
 	socksAddr := flag.String("torSocksAddr", "127.0.0.1:9150", "tor SOCKS address (e.g. 127.0.0.1:9050")
+	dataDir := flag.String("dataDir", "", "mailproxy data directory, defaults to ~/.mailproxy")
 	flag.Parse()
 
 	if len(*accountName) == 0 {
@@ -41,14 +42,19 @@ func main() {
 		return
 	}
 
-	// 1. ensure ~/.mailproxy config directory doesn't already exist
-	usr, err := user.Current()
-	if err != nil {
-		panic("failure to retrieve current user information")
+	// 1. ensure mailproxy data dir doesn't already exist
+	mailproxyDir := ""
+	if len(*dataDir) == 0 {
+		usr, err := user.Current()
+		if err != nil {
+			panic("failure to retrieve current user information")
+		}
+		mailproxyDir = path.Join(usr.HomeDir, ".mailproxy")
+	} else {
+		mailproxyDir = *dataDir
 	}
-	mailproxyDir := path.Join(usr.HomeDir, ".mailproxy")
 	if _, err := os.Stat(mailproxyDir); !os.IsNotExist(err) {
-		panic("aborting registration, ~/.mailproxy already exists")
+		panic(fmt.Sprintf("aborting registration, %s already exists", mailproxyDir))
 	}
 	if err := utils.MkDataDir(mailproxyDir); err != nil {
 		panic(err)
