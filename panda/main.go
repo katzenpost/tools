@@ -71,7 +71,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	session.WaitForPKIDocument()
 
 	// do the PANDA protocol here
 	blobSize := 10000
