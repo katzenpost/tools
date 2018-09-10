@@ -55,7 +55,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	s.WaitForPKIDocument()
+
 	serviceDesc, err := s.GetService(pingService)
 	if err != nil {
 		panic(err)
