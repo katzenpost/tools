@@ -1,0 +1,25 @@
+[Proxy]
+  DataDir = "/home/user/.cliclient"
+  NoLaunchListeners = true
+
+[Logging]
+  Disable = false
+  Level = "DEBUG"
+
+[NonvotingAuthority]
+  [NonvotingAuthority.TestAuthority]
+    Address = "37.218.242.147:29485"
+    PublicKey = "39Xhom6bPvez2gECACuTxm/DaxLRTGCMP7/KA78+vNw="
+
+[[Account]]
+  User = "david"
+  Provider = "idefix"
+  ProviderKeyPin = "3D9593D3B7D69CBB19AFC38689B365BCADF80ABFE6F7C4FE6B0859AEBE772092"
+  Authority = "TestAuthority"
+
+[Recipients]
+  "david@idefix" = "hxJJ/KAuQpktcVxO241HFPx8WOj1QnAGLpHld+zvDEQ="
+  "masala@ramix" = "jnJIpfVNCXBMhQv/gKGYdWZenHqoroN0bExYaA8GKVg="
+  "blackhole@idefix" = "UZ/VW8flXHMN8RGBrAVauTJNABfDFPv6egJ8v6YGu2A="
+  "blackhole@ramix" = "gjqrL3UMKz6rWATCvJdnqiNmoy5LnJ7emjAjnFJCviM="
+  # add more here ?
