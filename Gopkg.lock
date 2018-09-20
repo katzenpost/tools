@@ -276,7 +276,7 @@
 
 [[projects]]
   branch = "send_insecure_message.0"
-  digest = "1:7e608ad83633a2875844c356235d4ec4bc6aa51b4cf6da03036cda4e51f51761"
+  digest = "1:e41ccf4bb0ad5ef3f1b3e484dc3b85cc7f074e27ec50dbaeeb0090a44fb9ef09"
   name = "github.com/katzenpost/mailproxy"
   packages = [
     ".",
@@ -292,7 +292,7 @@
     "internal/recipient",
   ]
   pruneopts = "UT"
-  revision = "ae62da6f53c06041585d6440c0eef0c9ad5a83b1"
+  revision = "f7af650daa9984b3d03d3b4e403f3f0e79f2548f"
 
 [[projects]]
   digest = "1:354aba7b157c4e10efbce838f2e95743249d53fa395d59b1547de544c87f69ea"
