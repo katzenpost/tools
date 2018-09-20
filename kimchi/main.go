@@ -544,6 +544,7 @@ func main() {
 		}
 		if *genOnly {
 			for _, aCfg := range s.votingAuthConfigs {
+				aCfg.Debug.GenerateOnly = false
 				if err := saveKeys(aCfg); err != nil {
 					log.Fatalf("%s", err)
 				}
