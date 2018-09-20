@@ -21,7 +21,7 @@ required = ["github.com/coreos/bbolt"]
 
 [[constraint]]
   name = "github.com/katzenpost/mailproxy"
-  version = "0.0.2"
+  branch = "send_insecure_message.0"
 
 [[constraint]]
   branch = "master"

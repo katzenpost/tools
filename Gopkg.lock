@@ -275,7 +275,8 @@
   version = "v0.0.3"
 
 [[projects]]
-  digest = "1:3ed543bcd809135f476867c5fb038f515426078707221f1956f5f876524e7506"
+  branch = "send_insecure_message.0"
+  digest = "1:62ab468deaea8c73dc5b34dc27c6856380b53a68a0ec197b3fea057bb7a19a9a"
   name = "github.com/katzenpost/mailproxy"
   packages = [
     ".",
@@ -291,8 +292,7 @@
     "internal/recipient",
   ]
   pruneopts = "UT"
-  revision = "b45fd1feae724c10d267956beb8efedcb045a7b4"
-  version = "v0.0.2"
+  revision = "3f127725b3d967ba1f14ff48d5344d62d132e403"
 
 [[projects]]
   digest = "1:354aba7b157c4e10efbce838f2e95743249d53fa395d59b1547de544c87f69ea"
@@ -606,11 +606,12 @@
   version = "v2.1.8"
 
 [[projects]]
-  digest = "1:3c839a777de0e6da035c9de900b60cbec463b0a89351192c1ea083eaf9e0fce0"
+  branch = "v1"
+  digest = "1:0caa92e17bc0b65a98c63e5bc76a9e844cd5e56493f8fdbb28fad101a16254d9"
   name = "gopkg.in/tomb.v1"
   packages = ["."]
   pruneopts = "UT"
-  revision = "c131134a1947e9afd9cecfe11f4c6dff0732ae58"
+  revision = "dd632973f1e7218eb1089048e0798ec9ae7dceb8"
 
 [solve-meta]
   analyzer-name = "dep"
@@ -619,6 +620,7 @@
     "github.com/BurntSushi/toml",
     "github.com/abiosoft/ishell",
     "github.com/coreos/bbolt",
+    "github.com/emersion/go-message",
     "github.com/fatih/color",
     "github.com/hpcloud/tail",
     "github.com/katzenpost/authority/nonvoting/server",
