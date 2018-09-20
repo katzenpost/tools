@@ -630,7 +630,6 @@
     "github.com/katzenpost/registration_client/mailproxy",
     "github.com/katzenpost/server",
     "github.com/katzenpost/server/config",
-    "github.com/ugorji/go/codec",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1
