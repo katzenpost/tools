@@ -80,7 +80,7 @@ func (s *Server) initDataDir() error {
 			return fmt.Errorf("authority: DataDir '%v' is not a directory", d)
 		}
 		if fi.Mode() != dirMode {
-			return fmt.Errorf("authority: DataDir '%v' has invalid permissions '%v'", d, fi.Mode())
+			return fmt.Errorf("authority: DataDir '%v' has invalid permissions '%v', should be '%v'", d, fi.Mode(), dirMode)
 		}
 	}
 
@@ -106,6 +106,16 @@ func (s *Server) initLogging() error {
 // IdentityKey returns the running Server's identity public key.
 func (s *Server) IdentityKey() *eddsa.PublicKey {
 	return s.identityKey.PublicKey()
+}
+
+// RotateLog rotates the log file
+// if logging to a file is enabled.
+func (s *Server) RotateLog() {
+	err := s.logBackend.Rotate()
+	if err != nil {
+		s.fatalErrCh <- fmt.Errorf("Failed to rotate log file, shutting down server.")
+	}
+	s.log.Notice("Log rotated.")
 }
 
 // Wait waits till the server is terminated for any reason.

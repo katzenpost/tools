@@ -91,12 +91,12 @@
   revision = "5312a61534124124185d41f09206b9fef1d88403"
 
 [[projects]]
-  digest = "1:2a890e7debf4e44a43e999e9ebe121385347ef6e36f0efe2199b46b7b2d3dbc7"
+  digest = "1:3762d59edaa6e5c71d5e594c020c8391f274ff283e9c30fb43c518ec59a3f9b3"
   name = "github.com/coreos/bbolt"
   packages = ["."]
   pruneopts = "UT"
-  revision = "acbc2c426a444a65e0cbfdcbb3573857bf18b465"
-  version = "v1.3.1-etcd.7"
+  revision = "7ee3ded59d4835e10f3e7d0f7603c42aa5e83820"
+  version = "v1.3.1-etcd.8"
 
 [[projects]]
   digest = "1:2915e1464ca9a9480ed2fb94d6939cdf418525b03b24bfb256486990abd8155a"
@@ -150,12 +150,42 @@
   revision = "3f9db97f856818214da2e1057f8ad84803971cff"
 
 [[projects]]
-  digest = "1:97df918963298c287643883209a2c3f642e6593379f97ab400c2a2e219ab647d"
+  digest = "1:4c0989ca0bcd10799064318923b9bc2db6b4d6338dd75f3f2d86c3511aaaf5cf"
   name = "github.com/golang/protobuf"
-  packages = ["proto"]
+  packages = [
+    "proto",
+    "ptypes",
+    "ptypes/any",
+    "ptypes/duration",
+    "ptypes/timestamp",
+  ]
   pruneopts = "UT"
   revision = "aa810b61a9c79d51363740d207bb46cf8e620ed5"
   version = "v1.2.0"
+
+[[projects]]
+  branch = "master"
+  digest = "1:d900a5ae66a3181783dbf38e4a23505cdabd3e8e881c3d49ae8aa498b571b886"
+  name = "github.com/hashicorp/go-hclog"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "e45cbeb79f0411b1cfedd3f226ff69d5d433c762"
+
+[[projects]]
+  branch = "master"
+  digest = "1:20f78c1cf1b6fe6c55ba1407350d6fc7dc77d1591f8106ba693c28014a1a1b37"
+  name = "github.com/hashicorp/go-plugin"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "a4620f9913d19f03a6bf19b2f304daaaf83ea130"
+
+[[projects]]
+  branch = "master"
+  digest = "1:a4826c308e84f5f161b90b54a814f0be7d112b80164b9b884698a6903ea47ab3"
+  name = "github.com/hashicorp/yamux"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "7221087c3d281fda5f794e28c2ea4c6e4d5c4558"
 
 [[projects]]
   branch = "master"
@@ -187,7 +217,7 @@
   version = "v3.2.0"
 
 [[projects]]
-  digest = "1:670e2030bf8299177815c55206e9e874ef0fb58addcebc13daeacf89517571eb"
+  digest = "1:b460241086240668416e5f0e5a968a45588e058ce1223f340600627fe3a57ca6"
   name = "github.com/katzenpost/authority"
   packages = [
     "nonvoting/client",
@@ -196,8 +226,8 @@
     "nonvoting/server/config",
   ]
   pruneopts = "UT"
-  revision = "3bf4bfff67a398f6e085f173d83ff8e1c40848ad"
-  version = "v0.0.1"
+  revision = "cc38d542a8963c13cd960ab1e8e5fff39804bb36"
+  version = "v0.0.3"
 
 [[projects]]
   branch = "reply_bookkeeping.0"
@@ -265,15 +295,15 @@
   version = "v0.0.2"
 
 [[projects]]
-  digest = "1:ba0af2a82bd4a31272331bf161261c38328e160c02ef2f9112d097b202d314b7"
+  digest = "1:354aba7b157c4e10efbce838f2e95743249d53fa395d59b1547de544c87f69ea"
   name = "github.com/katzenpost/minclient"
   packages = [
     ".",
     "block",
   ]
   pruneopts = "UT"
-  revision = "b1f54e28d320fb6e4ef0746839fe87ebdc944ff7"
-  version = "v0.0.1"
+  revision = "53eda57a23d7fc1939d8ee7798cb9c04ab2fe0bf"
+  version = "v0.0.2"
 
 [[projects]]
   branch = "master"
@@ -298,26 +328,26 @@
   revision = "5291de75537cc8d0bb6c0200a5b2f56eb8788d51"
 
 [[projects]]
-  digest = "1:dcac21cd81de75044277551ee4792dafcbaed7cc83079469612363fe161cde67"
+  digest = "1:e13e09f6ad7888eb70a40f8853841fad1f6c9722d682e6e6c864645832b7f1f0"
   name = "github.com/katzenpost/playground"
   packages = ["."]
   pruneopts = "UT"
-  revision = "66ba06514d82f4f3051e77ed004fdd73a5a7fd8b"
-  version = "v0.0.0"
+  revision = "be16b121b4bb7aa7a69cec2fc1a40abdcaa07e72"
+  version = "v0.0.2"
 
 [[projects]]
   branch = "master"
-  digest = "1:5e12f4654a455e187353dd82270d6f3536761701896c50e0f2507704218e6218"
+  digest = "1:bdc0df012abee6813d48495599f4f70c81658d2e34077aed3b298a5638119d43"
   name = "github.com/katzenpost/registration_client"
   packages = [
     ".",
     "mailproxy",
   ]
   pruneopts = "UT"
-  revision = "fcb577f5d510977883f5083c70cadfbfbdcbc5d5"
+  revision = "4b6922380b681550fb0d3a5bfd5e1e2898831a5f"
 
 [[projects]]
-  digest = "1:e8c166abb3400b2c3eca2c8c5d84b8df3c9aadcc02d80f46c5c72edb79b29b63"
+  digest = "1:e8d6194cb8d9cdbbdbee8545b80712a0524c3d57697d4d55435eb258cded21c9"
   name = "github.com/katzenpost/server"
   packages = [
     ".",
@@ -337,6 +367,8 @@
     "internal/provider/kaetzchen",
     "internal/scheduler",
     "internal/sqldb",
+    "plugin",
+    "plugin/proto",
     "registration",
     "spool",
     "spool/boltspool",
@@ -345,8 +377,8 @@
     "userdb/externuserdb",
   ]
   pruneopts = "UT"
-  revision = "276d9d867c19875760d6e2fca038f1ae3c3a6703"
-  version = "v0.0.2"
+  revision = "2f39df47b792d1d8ec26a0e9c81cd18221fc145f"
+  version = "v0.0.3"
 
 [[projects]]
   digest = "1:c658e84ad3916da105a761660dcaeb01e63416c8ec7bc62256a9b411a05fcd67"
@@ -363,6 +395,22 @@
   pruneopts = "UT"
   revision = "6ca4dbf54d38eea1a992b3c722a76a5d1c4cb25c"
   version = "v0.0.4"
+
+[[projects]]
+  digest = "1:42eb1f52b84a06820cedc9baec2e710bfbda3ee6dac6cdb97f8b9a5066134ec6"
+  name = "github.com/mitchellh/go-testing-interface"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "6d0b8010fcc857872e42fc6c931227569016843c"
+  version = "v1.0.0"
+
+[[projects]]
+  digest = "1:9ec6cf1df5ad1d55cf41a43b6b1e7e118a91bade4f68ff4303379343e40c0e25"
+  name = "github.com/oklog/run"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "4dadeb3030eda0273a12382bb2348ffc7c9d1a39"
+  version = "v1.0.0"
 
 [[projects]]
   digest = "1:40e195917a951a8bf867cd05de2a46aaf1806c50cf92eebf4c16f78cd196f747"
@@ -414,26 +462,32 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:dba6b0fbd6ff12780db25ea5dc9a4869c32585a6e03ed0f38d22b023bff9166d"
+  digest = "1:2da0deadea2979244e8b56a207c9712125b2fe86e5bf83da2c7776e3d9addfbb"
   name = "golang.org/x/net"
   packages = [
+    "context",
+    "http/httpguts",
+    "http2",
+    "http2/hpack",
     "idna",
     "internal/socks",
+    "internal/timeseries",
     "proxy",
+    "trace",
   ]
   pruneopts = "UT"
   revision = "26e67e76b6c3f6ce91f7c52def5af501b4e0f3a2"
 
 [[projects]]
   branch = "master"
-  digest = "1:711af68777cecdb46e65dc72c0878c47872c1d39c12a198ded31d36a783a9aff"
+  digest = "1:f154ed6bdd7f4d63e6d9feee4af669d3d0a340f1a5d8d77294e99edd12ba0e22"
   name = "golang.org/x/sys"
   packages = [
     "cpu",
     "unix",
   ]
   pruneopts = "UT"
-  revision = "d0be0721c37eeb5299f245a996a483160fc36940"
+  revision = "d641721ec2dead6fe5ca284096fe4b1fcd49e427"
 
 [[projects]]
   digest = "1:4c3c045deaf0ae4d4b14f3abd22bbd322693d1bee1cc59b1e1667fdd3b683e0e"
@@ -469,6 +523,51 @@
   pruneopts = "UT"
   revision = "f21a4dfb5e38f5895301dc265a8def02365cc3d0"
   version = "v0.3.0"
+
+[[projects]]
+  branch = "master"
+  digest = "1:56b0bca90b7e5d1facf5fbdacba23e4e0ce069d25381b8e2f70ef1e7ebfb9c1a"
+  name = "google.golang.org/genproto"
+  packages = ["googleapis/rpc/status"]
+  pruneopts = "UT"
+  revision = "c3f76f3b92d1ffa4c58a9ff842a58b8877655e0f"
+
+[[projects]]
+  digest = "1:1b6d2676ea895d33cbd1999c75dfc8e25b103c754ccfc66dc06ae845ce3a47bc"
+  name = "google.golang.org/grpc"
+  packages = [
+    ".",
+    "balancer",
+    "balancer/base",
+    "balancer/roundrobin",
+    "codes",
+    "connectivity",
+    "credentials",
+    "encoding",
+    "encoding/proto",
+    "grpclog",
+    "health",
+    "health/grpc_health_v1",
+    "internal",
+    "internal/backoff",
+    "internal/channelz",
+    "internal/envconfig",
+    "internal/grpcrand",
+    "internal/transport",
+    "keepalive",
+    "metadata",
+    "naming",
+    "peer",
+    "resolver",
+    "resolver/dns",
+    "resolver/passthrough",
+    "stats",
+    "status",
+    "tap",
+  ]
+  pruneopts = "UT"
+  revision = "8dea3dc473e90c8179e519d91302d0597c0ca1d1"
+  version = "v1.15.0"
 
 [[projects]]
   digest = "1:975a4480c40f2d0b95e1f83d3ec1aa29a2774e80179e08a9a4ba2aab86721b23"

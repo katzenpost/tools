@@ -10,16 +10,24 @@
 Playground release
 ==================
 
-This release of the Katzenpost mailproxy is to be used
-with our public test mix network.
+**Katzenpost is still pre-alpha.  DO NOT DEPEND ON IT FOR STRONG SECURITY OR ANONYMITY.**
 
-0. Install the github release of this software that is suitable
-   to your operating system and hardware architecture.
+
+This release of the Katzenpost mailproxy is to be used with our public
+test mix network. Furthermore you should expect us to remove this free
+service when our testing period is over at some arbitrary time in the
+future.
+
+
+0. Install the latest github release of this software (versions v0.0.2 or later)
+   that is suitable to your operating system and hardware architecture, found here:
+
+   * https://github.com/katzenpost/playground/releases
 
 1. Run the registration program to register your account on the mix network:
    ::
 
-      ./registration -name alice
+      registration -name alice
 
    The above example creates the "alice" user on the "playground" provider and is
    therefore addressed as ``alice@playground``.
@@ -28,13 +36,13 @@ with our public test mix network.
    have Tor on your system you can register using our onion service like this:
    ::
 
-      ./registration -name alice -onion -torSocksAddr 127.0.0.1:9050
+      registration -name alice -onion -torSocksAddr 127.0.0.1:9050
 
 
    Or if you run the Tor Browser Bundle with the default Tor setup then simply:
    ::
 
-      ./registration -name alice -onion
+      registration -name alice -onion
 
 
 2. The above command should have printed "Success" and created a ~/.mailproxy directory
@@ -42,7 +50,7 @@ with our public test mix network.
    to run mailproxy like so:
    ::
    
-      ./mailproxy -f ~/.mailproxy/mailproxy.toml
+      mailproxy -f ~/.mailproxy/mailproxy.toml
 
 3. Configure your e-mail client to use mailproxy. That is to say,
    mailproxy exposes POP3 and SMTP services which your e-mail client
@@ -51,6 +59,30 @@ with our public test mix network.
 
       POP3 at 127.0.0.1 on port 2524
       SMTP at 127.0.0.1 on port 2525
+
+   Here's one possible solution:
+   1. install thunderbird::
+
+        sudo apt install thunderbird
+
+   2. Launch thunderbird and go to the Edit menu:
+
+      * select Account Settings
+
+      * click on the ``Account Actions`` drop down menu and select
+      ``Add Mail Account``. After clicking ``OK`` you should be
+      presented with a configuration window that lets you specify
+      incoming and outgoing mail settings. Click the drop down menu
+      for incoming and select ``POP3``. Set the POP3 server hostname
+      to ``127.0.0.1`` and set the POP3 port to 2524. Next set the
+      SMTP hostname to ``127.0.0.1`` and the SMTP port number
+      to 2525. Select ``None`` for both drop down menus that by
+      default specify TLS is used.  Set POP3 authentication to
+      ``Normal Password`` and SMTP authentication to ``No
+      Authentication``. POP3 authentication username must be set to
+      ``alice@playground`` where ``alice`` is replaced with your username
+      that you registered with. The password can be set to anything.
+
 
 Contact
 =======
