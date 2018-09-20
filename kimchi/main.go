@@ -449,7 +449,7 @@ func main() {
 
 	var err error
 	var voting = flag.Bool("voting", false, "if set then using voting authorities")
-	var votingNum = flag.Int("votingNum", 10, "the number of voting authorities")
+	var votingNum = flag.Int("votingNum", 3, "the number of voting authorities")
 	var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 	var memprofile = flag.String("memprofile", "", "write memory profile to this file")
 	var genOnly = flag.Bool("g", false, "Generate configuration files and exit immediately.")
