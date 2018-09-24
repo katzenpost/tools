@@ -25,12 +25,22 @@ import (
 
 	"github.com/katzenpost/core/utils"
 	"github.com/katzenpost/playground"
-	client "github.com/katzenpost/registration_client"
 	"github.com/katzenpost/registration_client/mailproxy"
+	"github.com/katzenpost/registration_client"
 )
 
 func main() {
 	accountName := flag.String("name", "", "account name to register")
+	providerName := flag.String("provider", playground.ProviderName, "provider to use")
+	providerKey := flag.String("providerKey", playground.ProviderKeyPin, "provider to use")
+
+	authority := flag.String("authority", playground.AuthorityAddr, "address of nonvoting pki")
+	onionAuthority := flag.String("onionAuthority", playground.OnionAuthorityAddr, ".onion address of nonvoting pki")
+	authorityKey := flag.String("authorityKey", playground.AuthorityPublicKey, "authority public key, base64 or hex")
+
+	registrationAddr := flag.String("registrationAddress", playground.RegistrationAddr, "account registration address")
+	onionRegistrationAddr := flag.String("onionRegistrationAddress", playground.OnionRegistrationAddr, "account registration address")
+
 	registerWithOnion := flag.Bool("onion", false, "register using the Tor onion service")
 	socksNet := flag.String("torSocksNet", "tcp", "tor SOCKS network (e.g. tcp or unix)")
 	socksAddr := flag.String("torSocksAddr", "127.0.0.1:9150", "tor SOCKS address (e.g. 127.0.0.1:9050")
@@ -61,16 +71,15 @@ func main() {
 	}
 
 	// 2. generate mailproxy key material and configuration
-	linkKey, identityKey, err := mailproxy.GenerateConfig(*accountName, mailproxyDir, *registerWithOnion, *socksNet, *socksAddr)
+	linkKey, identityKey, err := mailproxy.GenerateConfig(*accountName, *providerName, *providerKey, *authority, *onionAuthority, *authorityKey, mailproxyDir, *socksNet, *socksAddr, *registerWithOnion)
 	if err != nil {
 		panic(err)
 	}
 
 	// 3. perform registration with the mixnet Provider
 	var options *client.Options = nil
-	registrationAddr := playground.RegistrationAddr
 	if *registerWithOnion {
-		registrationAddr = playground.OnionRegistrationAddr
+		registrationAddr = onionRegistrationAddr
 		options = &client.Options{
 			Scheme:       "http",
 			UseSocks:     true,
@@ -78,7 +87,7 @@ func main() {
 			SocksAddress: *socksAddr,
 		}
 	}
-	c, err := client.New(registrationAddr, options)
+	c, err := client.New(*registrationAddr, options)
 	if err != nil {
 		panic(err)
 	}
@@ -87,5 +96,6 @@ func main() {
 		panic(err)
 	}
 
-	fmt.Println("Success.")
+	fmt.Printf("Successfully registered %s@%s\n", *accountName, *providerName)
+	fmt.Printf("mailproxy -f %s\n", *dataDir+"/mailproxy.toml")
 }
