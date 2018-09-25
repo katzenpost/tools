@@ -1,4 +1,4 @@
-// kimchi.go - Katzenpost self contained test network.
+// genconfig.go - Katzenpost self contained test network.
 // Copyright (C) 2017  Yawning Angel, David Stainton.
 //
 // This program is free software: you can redistribute it and/or modify
@@ -23,32 +23,22 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"net/textproto"
 	"os"
-	"os/signal"
 	"path/filepath"
-	"sync"
-	"syscall"
-	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/hpcloud/tail"
-	aServer "github.com/katzenpost/authority/nonvoting/server"
 	aConfig "github.com/katzenpost/authority/nonvoting/server/config"
 	"github.com/katzenpost/core/crypto/ecdh"
 	"github.com/katzenpost/core/crypto/eddsa"
 	"github.com/katzenpost/core/crypto/rand"
-	"github.com/katzenpost/core/epochtime"
-	"github.com/katzenpost/core/thwack"
 	"github.com/katzenpost/mailproxy"
 	pConfig "github.com/katzenpost/mailproxy/config"
 	"github.com/katzenpost/mailproxy/event"
-	nServer "github.com/katzenpost/server"
 	sConfig "github.com/katzenpost/server/config"
 )
 
 const (
-	logFile     = "kimchi.log"
 	basePort    = 30000
 	nrNodes     = 6
 	nrProviders = 2
@@ -60,10 +50,7 @@ var tailConfig = tail.Config{
 	Logger: tail.DiscardingLogger,
 }
 
-type kimchi struct {
-	sync.Mutex
-	sync.WaitGroup
-
+type katzenpost struct {
 	baseDir   string
 	logWriter io.Writer
 
@@ -88,21 +75,7 @@ type server interface {
 	Wait()
 }
 
-func (s *kimchi) initLogging() error {
-	logFilePath := filepath.Join(s.baseDir, logFile)
-	f, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
-	if err != nil {
-		return err
-	}
-
-	// Log to both stdout *and* the log file.
-	s.logWriter = io.MultiWriter(f, os.Stdout)
-	log.SetOutput(s.logWriter)
-
-	return nil
-}
-
-func (s *kimchi) genNodeConfig(isProvider bool) error {
+func (s *katzenpost) genNodeConfig(isProvider bool) error {
 	const serverLogFile = "katzenpost.log"
 
 	n := fmt.Sprintf("node-%d", s.nodeIdx)
@@ -116,6 +89,7 @@ func (s *kimchi) genNodeConfig(isProvider bool) error {
 	cfg.Server.Identifier = fmt.Sprintf("%s.eXaMpLe.org", n)
 	cfg.Server.Addresses = []string{fmt.Sprintf("127.0.0.1:%d", s.lastPort)}
 	cfg.Server.DataDir = filepath.Join(s.baseDir, n)
+	os.Mkdir(cfg.Server.DataDir, 0700)
 	cfg.Server.IsProvider = isProvider
 
 	// PKI section.
@@ -187,7 +161,7 @@ func (s *kimchi) genNodeConfig(isProvider bool) error {
 	return cfg.FixupAndValidate()
 }
 
-func (s *kimchi) genAuthConfig() error {
+func (s *katzenpost) genAuthConfig() error {
 	const authLogFile = "authority.log"
 
 	cfg := new(aConfig.Config)
@@ -217,7 +191,7 @@ func (s *kimchi) genAuthConfig() error {
 	return nil
 }
 
-func (s *kimchi) newMailProxy(user, provider string, privateKey *ecdh.PrivateKey) (*mailproxy.Proxy, error) {
+func (s *katzenpost) newMailProxy(user, provider string, privateKey *ecdh.PrivateKey) (*mailproxy.Proxy, error) {
 	const (
 		proxyLogFile = "katzenpost.log"
 		authID       = "testAuth"
@@ -300,89 +274,26 @@ func (s *kimchi) newMailProxy(user, provider string, privateKey *ecdh.PrivateKey
 		}
 	}()
 
-	go s.logTailer(dispName, filepath.Join(cfg.Proxy.DataDir, proxyLogFile))
 
 	return p, nil
 }
 
-func (s *kimchi) thwackUser(provider *sConfig.Config, user string, pubKey *ecdh.PublicKey) error {
-	log.Printf("Attempting to add user: %v@%v", user, provider.Server.Identifier)
-
-	sockFn := filepath.Join(provider.Server.DataDir, "management_sock")
-	c, err := textproto.Dial("unix", sockFn)
-	if err != nil {
-		return err
-	}
-	defer c.Close()
-
-	if _, _, err = c.ReadResponse(int(thwack.StatusServiceReady)); err != nil {
-		return err
-	}
-
-	for _, v := range []string{
-		fmt.Sprintf("ADD_USER %v %v", user, pubKey),
-		fmt.Sprintf("SET_USER_IDENTITY %v %v", user, pubKey),
-		"QUIT",
-	} {
-		if err = c.PrintfLine("%v", v); err != nil {
-			return err
-		}
-		if _, _, err = c.ReadResponse(int(thwack.StatusOk)); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (s *kimchi) logTailer(prefix, path string) {
-	s.Add(1)
-	defer s.Done()
-
-	l := log.New(s.logWriter, prefix+" ", 0)
-	t, err := tail.TailFile(path, tailConfig)
-	defer t.Cleanup()
-	if err != nil {
-		log.Fatalf("Failed to tail file '%v': %v", path, err)
-	}
-
-	s.Lock()
-	s.tails = append(s.tails, t)
-	s.Unlock()
-
-	for line := range t.Lines {
-		l.Print(line.Text)
-	}
-}
-
 func main() {
 	var err error
-	genOnly := flag.Bool("g", false, "Generate configuration files and exit immediately.")
+	// add nrMixes, nrProviders
+	nrNodes := flag.Int("n", 6, "Number of mixes.")
+	nrProviders := flag.Int("p", 1, "Number of providers.")
 	flag.Parse()
-	s := &kimchi{
+	s := &katzenpost{
 		lastPort:   basePort + 1,
 		recipients: make(map[string]*ecdh.PublicKey),
 	}
 
-	// TODO: Someone that cares enough can use a config file for this, but
-	// this is ultimately just for testing.
-
-	// Create the base directory and bring logging online.
 	s.baseDir, err = ioutil.TempDir("", "kimchi")
+	defer os.RemoveAll(s.baseDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create base directory: %v\n", err)
 		os.Exit(-1)
-	}
-	if err = s.initLogging(); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to initialize logging: %v\n", err)
-		os.Exit(-1)
-	}
-	log.Printf("Base Directory: %v", s.baseDir)
-
-	now, elapsed, till := epochtime.Now()
-	log.Printf("Epoch: %v (Elapsed: %v, Till: %v)", now, elapsed, till)
-	if till < epochtime.Period-(3600*time.Second) {
-		log.Printf("WARNING: Descriptor publication for the next epoch will FAIL.")
 	}
 
 	// Generate the authority identity key.
@@ -391,117 +302,39 @@ func main() {
 	}
 
 	// Generate the provider configs.
-	for i := 0; i < nrProviders; i++ {
+	for i := 0; i < *nrProviders; i++ {
 		if err = s.genNodeConfig(true); err != nil {
 			log.Fatalf("Failed to generate provider config: %v", err)
 		}
 	}
 
 	// Generate the node configs.
-	for i := 0; i < nrNodes; i++ {
+	for i := 0; i < *nrNodes; i++ {
 		if err = s.genNodeConfig(false); err != nil {
 			log.Fatalf("Failed to generate node config: %v", err)
 		}
 	}
-
-	// Generate the authority config, and launch the authority.
+	// Generate the authority config
 	if err = s.genAuthConfig(); err != nil {
 		log.Fatalf("Failed to generate authority config: %v", err)
 	}
-
-	// If generate only - set the debug option for each node.
-	if *genOnly {
-		for _, v := range s.nodeConfigs {
-			v.Debug.GenerateOnly = true
-		}
-		s.authConfig.Debug.GenerateOnly = true
+	// write the authority keys to disk
+	if err := saveKeys(s.authConfig); err != nil {
+		log.Fatalf("%s", err)
 	}
-
-	var svr server
-	svr, err = aServer.New(s.authConfig)
-	if err != nil && !*genOnly {
-		log.Fatalf("Failed to launch authority: %v", err)
+	// write the authority configuration to disk
+	if err := saveCfg(s.authConfig); err != nil {
+		log.Fatalf("Failed to saveCfg of authority with %s", err)
 	}
-	if *genOnly {
-		s.authConfig.Debug.GenerateOnly = false
-		if err := saveKeys(s.authConfig); err != nil {
+	// write the mixes keys and configs to disk
+	for _, v := range s.nodeConfigs {
+		if err := saveKeys(v); err != nil {
 			log.Fatalf("%s", err)
 		}
-		if err := saveCfg(s.authConfig); err != nil {
-			log.Fatalf("Failed to saveCfg of authority with %s", err)
+		if err := saveCfg(v); err != nil {
+			log.Fatalf("%s", err)
 		}
 	}
-
-	s.servers = append(s.servers, svr)
-	go s.logTailer("authority", filepath.Join(s.authConfig.Authority.DataDir, s.authConfig.Logging.File))
-
-	// Launch all the nodes.
-	for _, v := range s.nodeConfigs {
-		svr, err = nServer.New(v)
-		if err != nil && !*genOnly {
-			log.Fatalf("Failed to launch node: %v", err)
-		}
-		if *genOnly {
-			v.Debug.GenerateOnly = false
-			if err := saveKeys(v); err != nil {
-				log.Fatalf("%s", err)
-			}
-			if err := saveCfg(v); err != nil {
-				log.Fatalf("%s", err)
-			}
-		}
-		s.servers = append(s.servers, svr)
-
-		go s.logTailer(v.Server.Identifier, filepath.Join(v.Server.DataDir, v.Logging.File))
-	}
-
-	// Generate the private keys used by the clients in advance so they
-	// can know each other.
-	alicePrivateKey, _ := ecdh.NewKeypair(rand.Reader)
-	bobPrivateKey, _ := ecdh.NewKeypair(rand.Reader)
-	s.recipients["alice@provider-0.example.org"] = alicePrivateKey.PublicKey()
-	s.recipients["bob@provider-1.example.org"] = bobPrivateKey.PublicKey()
-
-	// Initialize Alice's mailproxy.
-	aliceProvider := s.authProviders[0].Identifier
-	if err = s.thwackUser(s.nodeConfigs[0], "aLiCe", alicePrivateKey.PublicKey()); err != nil {
-		log.Fatalf("Failed to add user: %v", err)
-	}
-	aliceProxy, err := s.newMailProxy("alice", aliceProvider, alicePrivateKey)
-	if err != nil {
-		log.Fatalf("Failed to create alice client: %v", err)
-	}
-	s.servers = append(s.servers, aliceProxy)
-
-	// Initialize Bob's mailproxy.
-	bobProvider := s.authProviders[1].Identifier
-	if err = s.thwackUser(s.nodeConfigs[1], "BoB", bobPrivateKey.PublicKey()); err != nil {
-		log.Fatalf("Failed to add user: %v", err)
-	}
-	bobProxy, err := s.newMailProxy("bob", bobProvider, bobPrivateKey)
-	if err != nil {
-		log.Fatalf("Failed to create bob client: %v", err)
-	}
-	s.servers = append(s.servers, bobProxy)
-
-	// Wait for a signal to tear it all down.
-	ch := make(chan os.Signal)
-	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
-	<-ch
-	log.Printf("Received shutdown request.")
-	for _, svr = range s.servers {
-		svr.Shutdown()
-	}
-	log.Printf("All servers halted.")
-
-	// Wait for the log tailers to return.  This typically won't re-log the
-	// shutdown sequence, but if people need the logs from that, they will
-	// be in each `DataDir` as needed.
-	for _, t := range s.tails {
-		t.StopAtEOF()
-	}
-	s.Wait()
-	log.Printf("Terminated.")
 }
 
 func identifier(cfg interface{}) string {
