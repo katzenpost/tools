@@ -17,6 +17,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/pem"
 	"flag"
 	"fmt"
@@ -27,7 +28,7 @@ import (
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
-	"github.com/hpcloud/tail"
+	vConfig "github.com/katzenpost/authority/voting/server/config"
 	aConfig "github.com/katzenpost/authority/nonvoting/server/config"
 	"github.com/katzenpost/core/crypto/ecdh"
 	"github.com/katzenpost/core/crypto/eddsa"
@@ -42,22 +43,16 @@ const (
 	basePort    = 30000
 	nrNodes     = 6
 	nrProviders = 2
+	nrAuthorities = 3
 )
-
-var tailConfig = tail.Config{
-	Poll:   true,
-	Follow: true,
-	Logger: tail.DiscardingLogger,
-}
 
 type katzenpost struct {
 	baseDir   string
 	logWriter io.Writer
 
 	authConfig    *aConfig.Config
+	votingAuthConfigs []*vConfig.Config
 	authIdentity  *eddsa.PrivateKey
-	authNodes     []*aConfig.Node
-	authProviders []*aConfig.Node
 
 	nodeConfigs []*sConfig.Config
 	lastPort    uint16
@@ -65,17 +60,9 @@ type katzenpost struct {
 	providerIdx int
 
 	recipients map[string]*ecdh.PublicKey
-
-	servers []server
-	tails   []*tail.Tail
 }
 
-type server interface {
-	Shutdown()
-	Wait()
-}
-
-func (s *katzenpost) genNodeConfig(isProvider bool) error {
+func (s *katzenpost) genNodeConfig(isProvider bool, isVoting bool) error {
 	const serverLogFile = "katzenpost.log"
 
 	n := fmt.Sprintf("node-%d", s.nodeIdx)
@@ -92,35 +79,59 @@ func (s *katzenpost) genNodeConfig(isProvider bool) error {
 	os.Mkdir(cfg.Server.DataDir, 0700)
 	cfg.Server.IsProvider = isProvider
 
-	// PKI section.
-	cfg.PKI = new(sConfig.PKI)
-	cfg.PKI.Nonvoting = new(sConfig.Nonvoting)
-	cfg.PKI.Nonvoting.Address = fmt.Sprintf("127.0.0.1:%d", basePort)
-	cfg.PKI.Nonvoting.PublicKey = s.authIdentity.PublicKey().String()
-
-	// Logging section.
-	cfg.Logging = new(sConfig.Logging)
-	cfg.Logging.File = serverLogFile
-	cfg.Logging.Level = "DEBUG"
-
 	// Debug section.
 	cfg.Debug = new(sConfig.Debug)
-	cfg.Debug.NumSphinxWorkers = 1
 	identity, err := eddsa.NewKeypair(rand.Reader)
 	if err != nil {
 		return err
 	}
 	cfg.Debug.IdentityKey = identity
 
-	aNode := new(aConfig.Node)
-	aNode.IdentityKey = identity.PublicKey()
+	// PKI section.
+	if isVoting {
+		peers := []*sConfig.Peer{}
+		for _, peer := range s.votingAuthConfigs {
+			idKey, err := peer.Debug.IdentityKey.PublicKey().MarshalText()
+			if err != nil {
+				return err
+			}
+
+			linkKey, err := peer.Debug.IdentityKey.PublicKey().ToECDH().MarshalText()
+			if err != nil {
+				return err
+			}
+			p := &sConfig.Peer{
+				Addresses:         peer.Authority.Addresses,
+				IdentityPublicKey: string(idKey),
+				LinkPublicKey:     string(linkKey),
+			}
+			if len(peer.Authority.Addresses) == 0 {
+				panic("wtf")
+			}
+			peers = append(peers, p)
+		}
+		cfg.PKI = &sConfig.PKI{
+			Voting: &sConfig.Voting{
+				Peers: peers,
+			},
+		}
+	} else {
+		cfg.PKI = new(sConfig.PKI)
+		cfg.PKI.Nonvoting = new(sConfig.Nonvoting)
+		cfg.PKI.Nonvoting.Address = fmt.Sprintf("127.0.0.1:%d", basePort)
+		cfg.PKI.Nonvoting.PublicKey = s.authIdentity.PublicKey().String()
+	}
+
+	// Logging section.
+	cfg.Logging = new(sConfig.Logging)
+	cfg.Logging.File = serverLogFile
+	cfg.Logging.Level = "DEBUG"
+
 	if isProvider {
 		// Enable the thwack interface.
 		cfg.Management = new(sConfig.Management)
 		cfg.Management.Enable = true
 
-		aNode.Identifier = cfg.Server.Identifier
-		s.authProviders = append(s.authProviders, aNode)
 		s.providerIdx++
 
 		cfg.Provider = new(sConfig.Provider)
@@ -153,7 +164,6 @@ func (s *katzenpost) genNodeConfig(isProvider bool) error {
 			}
 		*/
 	} else {
-		s.authNodes = append(s.authNodes, aNode)
 		s.nodeIdx++
 	}
 	s.nodeConfigs = append(s.nodeConfigs, cfg)
@@ -177,8 +187,12 @@ func (s *katzenpost) genAuthConfig() error {
 	cfg.Logging.Level = "DEBUG"
 
 	// The node lists.
-	cfg.Mixes = s.authNodes
-	cfg.Providers = s.authProviders
+	if providers, mixes, err := s.generateWhitelist(); err == nil {
+		cfg.Mixes = mixes
+		cfg.Providers = providers
+	} else {
+		return err
+	}
 
 	// Debug section.
 	cfg.Debug = new(aConfig.Debug)
@@ -189,6 +203,107 @@ func (s *katzenpost) genAuthConfig() error {
 	}
 	s.authConfig = cfg
 	return nil
+}
+
+func (s *katzenpost) genVotingAuthoritiesCfg(numAuthorities int) error {
+	parameters := &vConfig.Parameters{
+		MixLambda:       1,
+		MixMaxDelay:     10000,
+		SendLambda:      123,
+		SendShift:       12,
+		SendMaxInterval: 123456,
+	}
+	configs := []*vConfig.Config{}
+
+	// initial generation of key material for each authority
+	peersMap := make(map[[eddsa.PublicKeySize]byte]*vConfig.AuthorityPeer)
+	for i := 0; i < numAuthorities; i++ {
+		cfg := new(vConfig.Config)
+		cfg.Logging = &vConfig.Logging{
+			Disable: false,
+			File:    "katzenpost.log",
+			Level:   "DEBUG",
+		}
+		cfg.Parameters = parameters
+		cfg.Authority = &vConfig.Authority{
+			Identifier: fmt.Sprintf("authority-%v.example.org", i),
+			Addresses:  []string{fmt.Sprintf("127.0.0.1:%d", s.lastPort)},
+			DataDir:    filepath.Join(s.baseDir, fmt.Sprintf("authority%d", i)),
+		}
+		s.lastPort += 1
+		privateIdentityKey, err := eddsa.NewKeypair(rand.Reader)
+		if err != nil {
+			return err
+		}
+		cfg.Debug = &vConfig.Debug{
+			IdentityKey:      privateIdentityKey,
+			Layers:           3,
+			MinNodesPerLayer: 1,
+			GenerateOnly:     false,
+		}
+		configs = append(configs, cfg)
+		authorityPeer := &vConfig.AuthorityPeer{
+			IdentityPublicKey: cfg.Debug.IdentityKey.PublicKey(),
+			LinkPublicKey:     cfg.Debug.IdentityKey.PublicKey().ToECDH(),
+			Addresses:         cfg.Authority.Addresses,
+		}
+		peersMap[cfg.Debug.IdentityKey.PublicKey().ByteArray()] = authorityPeer
+	}
+
+	// tell each authority about it's peers
+	for i := 0; i < numAuthorities; i++ {
+		peers := []*vConfig.AuthorityPeer{}
+		for id, peer := range peersMap {
+			if !bytes.Equal(id[:], configs[i].Debug.IdentityKey.PublicKey().Bytes()) {
+				peers = append(peers, peer)
+			}
+		}
+		configs[i].Authorities = peers
+	}
+	s.votingAuthConfigs = configs
+	return nil
+}
+
+func (s *katzenpost) generateWhitelist() ([]*aConfig.Node, []*aConfig.Node, error) {
+	mixes := []*aConfig.Node{}
+	providers := []*aConfig.Node{}
+	for _, nodeCfg := range s.nodeConfigs {
+		if nodeCfg.Server.IsProvider {
+			provider := &aConfig.Node{
+				Identifier:  nodeCfg.Server.Identifier,
+				IdentityKey: nodeCfg.Debug.IdentityKey.PublicKey(),
+			}
+			providers = append(providers, provider)
+			continue
+		}
+		mix := &aConfig.Node{
+			IdentityKey: nodeCfg.Debug.IdentityKey.PublicKey(),
+		}
+		mixes = append(mixes, mix)
+	}
+
+	return providers, mixes, nil
+
+}
+func (s *katzenpost) generateVotingWhitelist() ([]*vConfig.Node, []*vConfig.Node, error) {
+	mixes := []*vConfig.Node{}
+	providers := []*vConfig.Node{}
+	for _, nodeCfg := range s.nodeConfigs {
+		if nodeCfg.Server.IsProvider {
+			provider := &vConfig.Node{
+				Identifier:  nodeCfg.Server.Identifier,
+				IdentityKey: nodeCfg.Debug.IdentityKey.PublicKey(),
+			}
+			providers = append(providers, provider)
+			continue
+		}
+		mix := &vConfig.Node{
+			IdentityKey: nodeCfg.Debug.IdentityKey.PublicKey(),
+		}
+		mixes = append(mixes, mix)
+	}
+
+	return providers, mixes, nil
 }
 
 func (s *katzenpost) newMailProxy(user, provider string, privateKey *ecdh.PrivateKey) (*mailproxy.Proxy, error) {
@@ -230,7 +345,7 @@ func (s *katzenpost) newMailProxy(user, provider string, privateKey *ecdh.Privat
 	acc := new(pConfig.Account)
 	acc.User = user
 	acc.Provider = provider
-	acc.Authority = authID
+	acc.NonvotingAuthority = authID
 	acc.LinkKey = privateKey
 	acc.IdentityKey = privateKey
 	// acc.StorageKey = privateKey
@@ -281,50 +396,79 @@ func (s *katzenpost) newMailProxy(user, provider string, privateKey *ecdh.Privat
 func main() {
 	var err error
 	// add nrMixes, nrProviders
-	nrNodes := flag.Int("n", 6, "Number of mixes.")
-	nrProviders := flag.Int("p", 1, "Number of providers.")
+	nrNodes := flag.Int("n", nrNodes, "Number of mixes.")
+	nrProviders := flag.Int("p", nrProviders, "Number of providers.")
+	voting := flag.Bool("v", false, "Generate voting configuration")
+	nrVoting := flag.Int("nv", nrAuthorities, "Generate voting configuration")
 	flag.Parse()
 	s := &katzenpost{
 		lastPort:   basePort + 1,
 		recipients: make(map[string]*ecdh.PublicKey),
 	}
 
-	s.baseDir, err = ioutil.TempDir("", "kimchi")
+	s.baseDir, err = ioutil.TempDir("", "katzenpost")
 	defer os.RemoveAll(s.baseDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create base directory: %v\n", err)
 		os.Exit(-1)
 	}
 
-	// Generate the authority identity key.
-	if s.authIdentity, err = eddsa.NewKeypair(rand.Reader); err != nil {
-		log.Fatalf("Failed to generate authority identity key: %v", err)
+	if *voting {
+		// Generate the voting authority configurations
+		err := s.genVotingAuthoritiesCfg(*nrVoting)
+		if err != nil {
+			log.Fatalf("getVotingAuthoritiesCfg failed: %s", err)
+		}
+	} else {
+		// Generate the authority identity key.
+		if s.authIdentity, err = eddsa.NewKeypair(rand.Reader); err != nil {
+			log.Fatalf("Failed to generate authority identity key: %v", err)
+		}
 	}
 
 	// Generate the provider configs.
 	for i := 0; i < *nrProviders; i++ {
-		if err = s.genNodeConfig(true); err != nil {
+		if err = s.genNodeConfig(true, *voting); err != nil {
 			log.Fatalf("Failed to generate provider config: %v", err)
 		}
 	}
 
 	// Generate the node configs.
 	for i := 0; i < *nrNodes; i++ {
-		if err = s.genNodeConfig(false); err != nil {
+		if err = s.genNodeConfig(false, *voting); err != nil {
 			log.Fatalf("Failed to generate node config: %v", err)
 		}
 	}
 	// Generate the authority config
-	if err = s.genAuthConfig(); err != nil {
-		log.Fatalf("Failed to generate authority config: %v", err)
-	}
-	// write the authority keys to disk
-	if err := saveKeys(s.authConfig); err != nil {
-		log.Fatalf("%s", err)
-	}
-	// write the authority configuration to disk
-	if err := saveCfg(s.authConfig); err != nil {
-		log.Fatalf("Failed to saveCfg of authority with %s", err)
+	if *voting {
+		providerWhitelist, mixWhitelist, err := s.generateVotingWhitelist()
+		if err != nil {
+			panic(err)
+		}
+		for _, aCfg := range s.votingAuthConfigs {
+			aCfg.Mixes = mixWhitelist
+			aCfg.Providers = providerWhitelist
+		}
+		for _, aCfg := range s.votingAuthConfigs {
+			if err := saveKeys(aCfg); err != nil {
+				log.Fatalf("%s", err)
+			}
+			if err := saveCfg(aCfg); err != nil {
+				log.Fatalf("Failed to saveCfg of authority with %s", err)
+			}
+		}
+	} else {
+		if err = s.genAuthConfig(); err != nil {
+			log.Fatalf("Failed to generate authority config: %v", err)
+		}
+		// write the authority keys to disk
+		if err := saveKeys(s.authConfig); err != nil {
+			log.Fatalf("%s", err)
+		}
+		// write the authority configuration to disk
+		if err := saveCfg(s.authConfig); err != nil {
+			log.Fatalf("Failed to saveCfg of authority with %s", err)
+		}
 	}
 	// write the mixes keys and configs to disk
 	for _, v := range s.nodeConfigs {
@@ -343,6 +487,8 @@ func identifier(cfg interface{}) string {
 		return cfg.(*sConfig.Config).Server.Identifier
 	case *aConfig.Config:
 		return "nonvoting"
+	case *vConfig.Config:
+		return cfg.(*vConfig.Config).Authority.Identifier
 	default:
 		log.Fatalf("identifier() passed unexpected type")
 		return ""
@@ -356,6 +502,8 @@ func normalizePaths(cfg interface{}) {
 		cfg.(*sConfig.Config).Management.Path = "/var/lib/katzenpost/management_sock"
 	case *aConfig.Config:
 		cfg.(*aConfig.Config).Authority.DataDir = "/var/lib/katzenpost-authority"
+	case *vConfig.Config:
+		cfg.(*vConfig.Config).Authority.DataDir = "/var/lib/katzenpost-authority"
 	}
 }
 
@@ -376,6 +524,11 @@ func saveKeys(cfg interface{}) (err error) {
 		}
 	case *aConfig.Config:
 		cfg := cfg.(*aConfig.Config)
+		if cfg.Debug.IdentityKey != nil {
+			identityKey.FromBytes(cfg.Debug.IdentityKey.Bytes())
+		}
+	case *vConfig.Config:
+		cfg := cfg.(*vConfig.Config)
 		if cfg.Debug.IdentityKey != nil {
 			identityKey.FromBytes(cfg.Debug.IdentityKey.Bytes())
 		}
