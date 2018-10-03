@@ -28,8 +28,8 @@ import (
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
-	vConfig "github.com/katzenpost/authority/voting/server/config"
 	aConfig "github.com/katzenpost/authority/nonvoting/server/config"
+	vConfig "github.com/katzenpost/authority/voting/server/config"
 	"github.com/katzenpost/core/crypto/ecdh"
 	"github.com/katzenpost/core/crypto/eddsa"
 	"github.com/katzenpost/core/crypto/rand"
@@ -40,9 +40,9 @@ import (
 )
 
 const (
-	basePort    = 30000
-	nrNodes     = 6
-	nrProviders = 2
+	basePort      = 30000
+	nrNodes       = 6
+	nrProviders   = 2
 	nrAuthorities = 3
 )
 
@@ -50,9 +50,9 @@ type katzenpost struct {
 	baseDir   string
 	logWriter io.Writer
 
-	authConfig    *aConfig.Config
+	authConfig        *aConfig.Config
 	votingAuthConfigs []*vConfig.Config
-	authIdentity  *eddsa.PrivateKey
+	authIdentity      *eddsa.PrivateKey
 
 	nodeConfigs []*sConfig.Config
 	lastPort    uint16
@@ -388,7 +388,6 @@ func (s *katzenpost) newMailProxy(user, provider string, privateKey *ecdh.Privat
 			}
 		}
 	}()
-
 
 	return p, nil
 }
