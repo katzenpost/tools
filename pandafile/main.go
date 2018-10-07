@@ -19,12 +19,17 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"strings"
+	"syscall"
 
 	"github.com/katzenpost/client"
 	"github.com/katzenpost/client/config"
 	"github.com/katzenpost/core/crypto/rand"
 	pclient "github.com/katzenpost/panda/client"
 	"github.com/katzenpost/panda/crypto"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 const (
@@ -33,16 +38,12 @@ const (
 
 func main() {
 	var configFile string
-	var sharedSecret string
-	var message string
-	var provider string
+	var shareFile string
 	var recipient string
 	genOnly := flag.Bool("g", false, "Generate the keys and exit immediately.")
 	flag.StringVar(&configFile, "c", "", "configuration file")
-	flag.StringVar(&sharedSecret, "secret", "", "the share secret")
-	flag.StringVar(&provider, "provider", "", "the Provider of the PANDA server")
-	flag.StringVar(&recipient, "recipient", "", "the recipient of the PANDA service")
-	flag.StringVar(&message, "message", "", "the secret message")
+	flag.StringVar(&recipient, "panda", "", "the recipient of the PANDA service, in the form: user@provider")
+	flag.StringVar(&shareFile, "file", "", "the file to share")
 	flag.Parse()
 
 	if *genOnly {
@@ -57,6 +58,29 @@ func main() {
 		return
 	}
 
+	// parse recipient from commandline arg
+	fields := strings.Split(recipient, "@")
+	if len(fields) != 2 {
+		flag.Usage()
+		return
+	}
+	user := fields[0]
+	provider := fields[1]
+
+	// read file to share
+	message, err := ioutil.ReadFile(shareFile)
+	if err != nil {
+		panic(err)
+	}
+
+	// prompt for passphrase
+	fmt.Printf("passphrase>> ")
+	passphrase, err := terminal.ReadPassword(int(syscall.Stdin))
+	if err != nil {
+		panic(err)
+	}
+
+	// load config
 	cfg, err := config.LoadFile(configFile, *genOnly)
 	if err != nil {
 		panic(err)
@@ -74,8 +98,8 @@ func main() {
 
 	// do the PANDA protocol here
 	blobSize := 10000
-	panda := pclient.New(blobSize, session, c.GetLogger("katzenpost/PANDA"), recipient, provider)
-	kx, err := crypto.NewKeyExchange(rand.Reader, panda, []byte(sharedSecret), []byte(message))
+	panda := pclient.New(blobSize, session, c.GetLogger("katzenpost/PANDA"), user, provider)
+	kx, err := crypto.NewKeyExchange(rand.Reader, panda, []byte(passphrase), message)
 	if err != nil {
 		panic(err)
 	}
@@ -83,7 +107,13 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("GOT REPLY: %s\n", string(reply))
+
+	// write the file to disk
+	perm := os.FileMode(0400)
+	err = ioutil.WriteFile("output", reply, perm)
+	if err != nil {
+		panic(err)
+	}
 
 	// shutdown the client
 	c.Shutdown()
