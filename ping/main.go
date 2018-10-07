@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	pingService = "echo"
+	pingService = "loop"
 )
 
 func main() {
