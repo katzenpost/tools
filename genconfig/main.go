@@ -240,7 +240,7 @@ func (s *katzenpost) genVotingAuthoritiesCfg(numAuthorities int) error {
 		cfg.Authority = &vConfig.Authority{
 			Identifier: fmt.Sprintf("authority-%v.example.org", i),
 			Addresses:  []string{fmt.Sprintf("127.0.0.1:%d", s.lastPort)},
-			DataDir:    filepath.Join(s.baseDir, fmt.Sprintf("authority%d", i)),
+			DataDir:    filepath.Join(s.baseDir, fmt.Sprintf("authority-%d", i)),
 		}
 		os.Mkdir(cfg.Authority.DataDir, 0700)
 		s.lastPort += 1
