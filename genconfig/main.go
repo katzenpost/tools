@@ -18,11 +18,9 @@ package main
 
 import (
 	"bytes"
-	"encoding/pem"
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -81,11 +79,15 @@ func (s *katzenpost) genNodeConfig(isProvider bool, isVoting bool) error {
 
 	// Debug section.
 	cfg.Debug = new(sConfig.Debug)
-	identity, err := eddsa.NewKeypair(rand.Reader)
+
+	// Generate keys
+	priv := filepath.Join(cfg.Server.DataDir, "identity.private.pem")
+	public := filepath.Join(cfg.Server.DataDir, "identity.public.pem")
+	idKey, err := eddsa.Load(priv, public, rand.Reader)
 	if err != nil {
 		return err
 	}
-	cfg.Debug.IdentityKey = identity
+	cfg.Debug.IdentityKey = idKey
 
 	// PKI section.
 	if isVoting {
@@ -119,7 +121,13 @@ func (s *katzenpost) genNodeConfig(isProvider bool, isVoting bool) error {
 		cfg.PKI = new(sConfig.PKI)
 		cfg.PKI.Nonvoting = new(sConfig.Nonvoting)
 		cfg.PKI.Nonvoting.Address = fmt.Sprintf("127.0.0.1:%d", basePort)
-		cfg.PKI.Nonvoting.PublicKey = s.authIdentity.PublicKey().String()
+		if s.authIdentity == nil {
+		}
+		idKey, err := s.authIdentity.PublicKey().MarshalText()
+		if err != nil {
+			return err
+		}
+		cfg.PKI.Nonvoting.PublicKey = string(idKey)
 	}
 
 	// Logging section.
@@ -186,17 +194,21 @@ func (s *katzenpost) genAuthConfig() error {
 	cfg.Logging.File = authLogFile
 	cfg.Logging.Level = "DEBUG"
 
-	// The node lists.
-	if providers, mixes, err := s.generateWhitelist(); err == nil {
-		cfg.Mixes = mixes
-		cfg.Providers = providers
-	} else {
+	// Mkdir
+	os.Mkdir(cfg.Authority.DataDir, 0700)
+
+	// Generate keys
+	priv := filepath.Join(cfg.Authority.DataDir, "identity.private.pem")
+	public := filepath.Join(cfg.Authority.DataDir, "identity.public.pem")
+	idKey, err := eddsa.Load(priv, public, rand.Reader)
+	s.authIdentity = idKey
+	if err != nil {
 		return err
 	}
 
 	// Debug section.
 	cfg.Debug = new(aConfig.Debug)
-	cfg.Debug.IdentityKey = s.authIdentity
+	cfg.Debug.IdentityKey = idKey
 
 	if err := cfg.FixupAndValidate(); err != nil {
 		return err
@@ -230,13 +242,16 @@ func (s *katzenpost) genVotingAuthoritiesCfg(numAuthorities int) error {
 			Addresses:  []string{fmt.Sprintf("127.0.0.1:%d", s.lastPort)},
 			DataDir:    filepath.Join(s.baseDir, fmt.Sprintf("authority%d", i)),
 		}
+		os.Mkdir(cfg.Authority.DataDir, 0700)
 		s.lastPort += 1
-		privateIdentityKey, err := eddsa.NewKeypair(rand.Reader)
+		priv := filepath.Join(cfg.Authority.DataDir, "identity.private.pem")
+		public := filepath.Join(cfg.Authority.DataDir, "identity.public.pem")
+		idKey, err := eddsa.Load(priv, public, rand.Reader)
 		if err != nil {
 			return err
 		}
 		cfg.Debug = &vConfig.Debug{
-			IdentityKey:      privateIdentityKey,
+			IdentityKey:      idKey,
 			Layers:           3,
 			MinNodesPerLayer: 1,
 			GenerateOnly:     false,
@@ -400,17 +415,20 @@ func main() {
 	nrProviders := flag.Int("p", nrProviders, "Number of providers.")
 	voting := flag.Bool("v", false, "Generate voting configuration")
 	nrVoting := flag.Int("nv", nrAuthorities, "Generate voting configuration")
+	baseDir := flag.String("b", "", "Path to use as baseDir option")
 	flag.Parse()
 	s := &katzenpost{
 		lastPort:   basePort + 1,
 		recipients: make(map[string]*ecdh.PublicKey),
 	}
 
-	s.baseDir, err = ioutil.TempDir("", "katzenpost")
-	defer os.RemoveAll(s.baseDir)
-	if err != nil {
+	bd, err := filepath.Abs(*baseDir); if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create base directory: %v\n", err)
 		os.Exit(-1)
+		return
+	} else {
+		s.baseDir = bd
+		os.Mkdir(bd, 0700)
 	}
 
 	if *voting {
@@ -420,9 +438,8 @@ func main() {
 			log.Fatalf("getVotingAuthoritiesCfg failed: %s", err)
 		}
 	} else {
-		// Generate the authority identity key.
-		if s.authIdentity, err = eddsa.NewKeypair(rand.Reader); err != nil {
-			log.Fatalf("Failed to generate authority identity key: %v", err)
+		if err = s.genAuthConfig(); err != nil {
+			log.Fatalf("Failed to generate authority config: %v", err)
 		}
 	}
 
@@ -450,34 +467,42 @@ func main() {
 			aCfg.Providers = providerWhitelist
 		}
 		for _, aCfg := range s.votingAuthConfigs {
-			if err := saveKeys(aCfg); err != nil {
-				log.Fatalf("%s", err)
-			}
 			if err := saveCfg(aCfg); err != nil {
 				log.Fatalf("Failed to saveCfg of authority with %s", err)
 			}
 		}
 	} else {
-		if err = s.genAuthConfig(); err != nil {
-			log.Fatalf("Failed to generate authority config: %v", err)
+		// The node lists.
+		if providers, mixes, err := s.generateWhitelist(); err == nil {
+			s.authConfig.Mixes = mixes
+			s.authConfig.Providers = providers
+		} else {
+			log.Fatalf("Failed to generateWhitelist with %s", err)
 		}
-		// write the authority keys to disk
-		if err := saveKeys(s.authConfig); err != nil {
-			log.Fatalf("%s", err)
-		}
-		// write the authority configuration to disk
+
 		if err := saveCfg(s.authConfig); err != nil {
 			log.Fatalf("Failed to saveCfg of authority with %s", err)
 		}
 	}
 	// write the mixes keys and configs to disk
 	for _, v := range s.nodeConfigs {
-		if err := saveKeys(v); err != nil {
-			log.Fatalf("%s", err)
-		}
 		if err := saveCfg(v); err != nil {
 			log.Fatalf("%s", err)
 		}
+	}
+}
+
+func basedir(cfg interface{}) string {
+	switch cfg.(type) {
+	case *sConfig.Config:
+		return cfg.(*sConfig.Config).Server.DataDir
+	case *aConfig.Config:
+		return cfg.(*aConfig.Config).Authority.DataDir
+	case *vConfig.Config:
+		return cfg.(*vConfig.Config).Authority.DataDir
+	default:
+		log.Fatalf("identifier() passed unexpected type")
+		return ""
 	}
 }
 
@@ -495,65 +520,8 @@ func identifier(cfg interface{}) string {
 	}
 }
 
-func normalizePaths(cfg interface{}) {
-	switch cfg.(type) {
-	case *sConfig.Config:
-		cfg.(*sConfig.Config).Server.DataDir = "/var/lib/katzenpost"
-		cfg.(*sConfig.Config).Management.Path = "/var/lib/katzenpost/management_sock"
-	case *aConfig.Config:
-		cfg.(*aConfig.Config).Authority.DataDir = "/var/lib/katzenpost-authority"
-	case *vConfig.Config:
-		cfg.(*vConfig.Config).Authority.DataDir = "/var/lib/katzenpost-authority"
-	}
-}
-
-func saveKeys(cfg interface{}) (err error) {
-	var identityPrivateKeyFile, identityPublicKeyFile string
-	identityKey := new(eddsa.PrivateKey)
-
-	pubFile := fmt.Sprintf("%s.public.pem", identifier(cfg))
-	privFile := fmt.Sprintf("%s.private.pem", identifier(cfg))
-
-	switch cfg.(type) {
-	case *sConfig.Config:
-		cfg := cfg.(*sConfig.Config)
-		identityPrivateKeyFile = filepath.Join(cfg.Server.DataDir, "identity.private.pem")
-		identityPublicKeyFile = filepath.Join(cfg.Server.DataDir, "identity.public.pem")
-		if identityKey, err = eddsa.Load(identityPrivateKeyFile, identityPublicKeyFile, rand.Reader); err != nil {
-			return err
-		}
-	case *aConfig.Config:
-		cfg := cfg.(*aConfig.Config)
-		if cfg.Debug.IdentityKey != nil {
-			identityKey.FromBytes(cfg.Debug.IdentityKey.Bytes())
-		}
-	case *vConfig.Config:
-		cfg := cfg.(*vConfig.Config)
-		if cfg.Debug.IdentityKey != nil {
-			identityKey.FromBytes(cfg.Debug.IdentityKey.Bytes())
-		}
-	default:
-		log.Fatalf("privIdKeY() passed unexpected type")
-	}
-
-	const keyType = "ED25519 PRIVATE KEY"
-	blk := &pem.Block{
-		Type:  keyType,
-		Bytes: identityKey.Bytes(),
-	}
-
-	if err = ioutil.WriteFile(privFile, pem.EncodeToMemory(blk), 0600); err != nil {
-		return err
-	}
-	if err = identityKey.PublicKey().ToPEMFile(pubFile); err != nil {
-		return err
-	}
-	return nil
-}
-
 func saveCfg(cfg interface{}) error {
-	fileName := fmt.Sprintf("%s.toml", identifier(cfg))
-	normalizePaths(cfg)
+	fileName := filepath.Join(basedir(cfg), fmt.Sprintf("%s.toml", identifier(cfg)))
 	log.Printf("saveCfg of %s", fileName)
 	f, err := os.Create(fileName)
 	if err != nil {
