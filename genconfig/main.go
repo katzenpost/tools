@@ -24,6 +24,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	vConfig "github.com/katzenpost/authority/voting/server/config"
@@ -56,6 +57,7 @@ type katzenpost struct {
 	lastPort    uint16
 	nodeIdx     int
 	providerIdx int
+	period      time.Duration
 
 	recipients map[string]*ecdh.PublicKey
 }
@@ -129,6 +131,8 @@ func (s *katzenpost) genNodeConfig(isProvider bool, isVoting bool) error {
 		}
 		cfg.PKI.Nonvoting.PublicKey = string(idKey)
 	}
+	// Set the Epoch period
+	cfg.PKI.EpochPeriod = s.period
 
 	// Logging section.
 	cfg.Logging = new(sConfig.Logging)
@@ -224,6 +228,7 @@ func (s *katzenpost) genVotingAuthoritiesCfg(numAuthorities int) error {
 		SendLambda:      123,
 		SendShift:       12,
 		SendMaxInterval: 123456,
+		EpochPeriod:     s.period,
 	}
 	configs := []*vConfig.Config{}
 
@@ -410,16 +415,17 @@ func (s *katzenpost) newMailProxy(user, provider string, privateKey *ecdh.Privat
 
 func main() {
 	var err error
-	// add nrMixes, nrProviders
 	nrNodes := flag.Int("n", nrNodes, "Number of mixes.")
 	nrProviders := flag.Int("p", nrProviders, "Number of providers.")
 	voting := flag.Bool("v", false, "Generate voting configuration")
 	nrVoting := flag.Int("nv", nrAuthorities, "Generate voting configuration")
 	baseDir := flag.String("b", "", "Path to use as baseDir option")
+	period := flag.Int("e", 1800, "Seconds per epoch period")
 	flag.Parse()
 	s := &katzenpost{
 		lastPort:   basePort + 1,
 		recipients: make(map[string]*ecdh.PublicKey),
+		period:     time.Duration(*period),
 	}
 
 	bd, err := filepath.Abs(*baseDir); if err != nil {
