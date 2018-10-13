@@ -305,6 +305,7 @@ func (s *kimchi) generateVotingWhitelist() ([]*vConfig.Node, []*vConfig.Node, er
 
 func (s *kimchi) runVotingAuthorities() error {
 	for _, vCfg := range s.votingAuthConfigs {
+		vCfg.FixupAndValidate()
 		server, err := vServer.New(vCfg)
 		if err != nil {
 			return err
@@ -560,6 +561,7 @@ func main() {
 
 	// Launch all the nodes.
 	for _, v := range s.nodeConfigs {
+		v.FixupAndValidate()
 		svr, err := nServer.New(v)
 		if err != nil && !*genOnly {
 			log.Fatalf("Failed to launch node: %v", err)

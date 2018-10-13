@@ -14,6 +14,7 @@ RUN git clone https://github.com/katzenpost/server
 WORKDIR /go/src/github.com/katzenpost/daemons
 # install go dep
 RUN go get -u github.com/golang/dep/cmd/dep
+RUN git checkout voting_release
 RUN dep ensure
 WORKDIR /go/src/github.com/katzenpost/daemons/authority/nonvoting
 RUN CGO_ENABLED=0 go install
