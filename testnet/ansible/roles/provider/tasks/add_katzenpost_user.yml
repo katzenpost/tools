@@ -1,0 +1,10 @@
+- name: Add katzenpost group
+  group:
+    name: katzenpost
+    state: present
+
+- name: Add katzenpost user
+  user:
+    create_home: false
+    name: katzenpost
+    group: katzenpost

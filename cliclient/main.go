@@ -24,6 +24,7 @@ import (
 
 	"github.com/katzenpost/mailproxy"
 	"github.com/katzenpost/mailproxy/config"
+	"github.com/katzenpost/mailproxy/event"
 )
 
 func main() {
@@ -41,6 +42,27 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Failed to load config file '%v': %v\n", *cfgFile, err)
 		os.Exit(-1)
 	}
+
+	// Setup an event sink.
+	cfg.Proxy.EventSink = make(chan event.Event)
+	go func() {
+		for {
+			select {
+			case ievent := <-cfg.Proxy.EventSink:
+				fmt.Printf("Received EVENT: %s\n", ievent)
+				switch event := ievent.(type) {
+				case *event.ConnectionStatusEvent:
+					fmt.Println("ConnectionStatusEvent")
+				case *event.MessageSentEvent:
+					fmt.Println("MessageSentEvent")
+				case *event.MessageReceivedEvent:
+					fmt.Println("MessageReceivedEvent")
+				case *event.KaetzchenReplyEvent:
+					fmt.Printf("KaetzchenReplyEvent payload %s", string(event.Payload))
+				}
+			}
+		}
+	}()
 
 	// Start up the proxy.
 	fmt.Printf("Starting mailproxy...\n")

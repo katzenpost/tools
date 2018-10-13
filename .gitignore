@@ -1,0 +1,7 @@
+*.swp
+*~
+
+# Binaries
+
+# Non-external dependencies.
+vendor/github.com/katzenpost

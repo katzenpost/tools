@@ -105,7 +105,7 @@ func NewShell(proxy *mailproxy.Proxy, cfg *config.Config) *Shell {
 					fmt.Sprintf(messageTemplate,
 						date, msgSubject, fromIdentity,
 						toIdentity, msgBody)
-				err = proxy.SendMessage(fromIdentity, toIdentity, []byte(testMessage))
+				_, err = proxy.SendMessage(fromIdentity, toIdentity, []byte(testMessage))
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "SendMessage failed: %v\n", err)
 					os.Exit(-1)
@@ -231,7 +231,34 @@ func NewShell(proxy *mailproxy.Proxy, cfg *config.Config) *Shell {
 			// XXX sanitize time
 			date := "Mon, 42 Jan 4242 42:42:42 +0100"
 			testMessage := fmt.Sprintf(messageTemplate, date, msgSubject, fromIdentity, toIdentity, msgBody)
-			err = proxy.SendMessage(fromIdentity, toIdentity, []byte(testMessage))
+			_, err = proxy.SendMessage(fromIdentity, toIdentity, []byte(testMessage))
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "SendMessage failed: %v\n", err)
+				os.Exit(-1)
+			}
+		},
+	})
+
+	shell.ishell.AddCmd(&ishell.Cmd{
+		Name: "sendKaetzchen",
+		Help: "send message to kaetzchen",
+		Func: func(c *ishell.Context) {
+			fromIdentity := ""
+			if currIdent != "" {
+				fromIdentity = currIdent
+			} else {
+				c.Print("From: ")
+				fromIdentity = c.ReadLine()
+			}
+			c.Print("ServiceID: ")
+			serviceID := c.ReadLine()
+			c.Print("ProviderID: ")
+			providerID := c.ReadLine()
+			c.Print("want response? y/n: ")
+			wantResponse := c.ReadLine()
+			c.Print("Payload: (ctrl-D to end)\n")
+			payload := c.ReadMultiLines("\n.\n")
+			_, err := proxy.SendKaetzchenRequest(fromIdentity, serviceID, providerID, []byte(payload), wantResponse == "y")
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "SendMessage failed: %v\n", err)
 				os.Exit(-1)
