@@ -1,0 +1,7 @@
+- name: install golang-1.10
+  remote_user: root
+  apt:
+    name: golang-1.10
+    state: latest
+    default_release: stretch-backports
+    update_cache: yes
