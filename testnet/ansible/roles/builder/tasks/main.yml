@@ -5,43 +5,79 @@
     path: "{{ buildDir }}"
     state: directory
 
-- name: build authority
-  command: docker build -f ../authority.dockerfile -t authority .
+- name: create temporary gopath
+  file:
+    path: "{{ buildDir }}/go"
+    state: directory
 
-- name: create authority docker image
-  command: docker create --name {{ buildTime }}-authority authority
+- name: create source path
+  file:
+    path: "{{ buildDir }}/go/src/github.com/katzenpost/daemons"
+    state: directory
 
-- name: extract authority binary from docker image
-  command: docker cp {{ buildTime }}-authority:nonvoting {{ authorityDestPath }}
+- name: install godep
+  environment:
+    GOPATH: "{{ buildDir }}/go"
+    PATH: "{{ buildDir }}/go/bin:{{ ansible_env.PATH }}"
+  command: go get -u github.com/golang/dep/cmd/dep
 
-- name: remove docker image
-  command: docker rm {{ buildTime }}-authority
+- name: clone the daemons repository
+  git:
+    repo: https://github.com/katzenpost/daemons
+    dest: "{{ buildDir }}/go/src/github.com/katzenpost/daemons"
+    version: voting_release
 
-- name: build server
-  command: docker build -f ../server.dockerfile -t server .
+- name: run dep ensure
+  environment:
+    GOPATH: "{{ buildDir }}/go"
+    PATH: "{{ buildDir }}/go/bin:{{ ansible_env.PATH }}"
+  command: dep ensure
+  args:
+    chdir: "{{ buildDir }}/go/src/github.com/katzenpost/daemons"
 
-- name: create server docker image
-  command: docker create --name {{ buildTime }}-server server
+- name: go install nonvoting authority
+  environment:
+    GOPATH: "{{ buildDir }}/go"
+    PATH: "{{ buildDir }}/go/bin:{{ ansible_env.PATH }}"
+  command: go install
+  args:
+    chdir: "{{ buildDir }}/go/src/github.com/katzenpost/daemons/authority/nonvoting"
 
-- name: extract server binary from docker image
-  command: docker cp {{ buildTime }}-server:server {{ serverDestPath }}
+- name: go install voting authority
+  environment:
+    GOPATH: "{{ buildDir }}/go"
+    PATH: "{{ buildDir }}/go/bin:{{ ansible_env.PATH }}"
+  command: go install
+  args:
+    chdir: "{{ buildDir }}/go/src/github.com/katzenpost/daemons/authority/voting"
 
-- name: remove docker image
-  command: docker rm {{ buildTime }}-server
+- name: go install server
+  environment:
+    GOPATH: "{{ buildDir }}/go"
+    PATH: "{{ buildDir }}/go/bin:{{ ansible_env.PATH }}"
+  command: go install
+  args:
+    chdir: "{{ buildDir }}/go/src/github.com/katzenpost/daemons/server"
 
 - name: ensure latest directory exists
   file:
     path: latest
     state: directory
 
-- name: symlink latest server build
-  file:
-    src: "{{ serverDestPath }}"
+- name: fetch server binary
+  fetch:
+    src: "{{ buildDir }}/go/bin/server"
+    flat: yes
     dest: latest/server
-    state: link
 
-- name: symlink latest authority build
-  file:
-    src: "{{ authorityDestPath }}"
+- name: fetch nonvoting binary
+  fetch:
+    src: "{{ buildDir }}/go/bin/nonvoting"
+    flat: yes
     dest: latest/nonvoting
-    state: link
+
+- name: fetch voting binary
+  fetch:
+    src: "{{ buildDir }}/go/bin/voting"
+    flat: yes
+    dest: latest/voting

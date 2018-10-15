@@ -1,9 +1,15 @@
 ---
 # This playbook deploys the katzenpost mixnet
 
-- name: Build katzenpost binaries locally
+- name: Install golang-1.10
+  remote_user: root
   hosts: Builder
-  connection: local
+  roles:
+    - build_dependencies
+
+- name: Build katzenpost binaries
+  remote_user: masala
+  hosts: Builder
   roles:
     - builder
   vars:
