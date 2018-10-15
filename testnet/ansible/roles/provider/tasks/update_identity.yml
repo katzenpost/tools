@@ -8,8 +8,3 @@
   copy: src="{{ idPrivKey }}" dest=/var/lib/katzenpost/identity.private.pem owner=katzenpost group=katzenpost mode=0600
   notify:
     - restart katzen-provider
-
-- name: rotate provider link private key
-  copy: src="{{ linkPrivKey }}" dest=/var/lib/katzenpost/link.private.pem owner=katzenpost group=katzenpost mode=0600
-  notify:
-    - restart katzen-provider

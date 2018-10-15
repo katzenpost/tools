@@ -3,7 +3,9 @@
 - include: create_service_datadir.yml
 - include: create_log_dir.yml
 - include: install_systemd_unit.yml
+- include: install_pip.yml
 - include: install_tailon.yml
 - include: update_binary.yml
 - include: update_config.yml
 - include: update_identity.yml
+- include: restart.yml
