@@ -1,0 +1,3 @@
+# handler to handle authority notifications
+- name: restart katzen-authority
+  service: name=katzen-authority state=restarted enabled=yes
