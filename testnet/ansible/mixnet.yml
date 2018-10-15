@@ -16,7 +16,8 @@
     buildTime: "{{ ansible_date_time.iso8601_basic }}"
     buildDir: "{{ ansible_env.PWD }}/{{ buildTime }}"
     serverDestPath: "{{ buildDir}}/server"
-    authorityDestPath: "{{ buildDir}}/nonvoting"
+    nonvotingAuthorityDestPath: "{{ buildDir}}/nonvoting"
+    votingAuthorityDestPath: "{{ buildDir}}/voting"
 
 - name: Install/Update katzenpost on Authority
   remote_user: root
@@ -24,7 +25,7 @@
   roles:
     - authority
   vars:
-    binaryPath: "latest/nonvoting"
+    binaryPath: "latest/voting"
 
 - name: Install/Update katzenpost on Mixes
   remote_user: root
