@@ -42,6 +42,14 @@
 [[projects]]
   branch = "master"
   digest = "1:8fa55a6e302771a90a86ceae1ca3c0df4ef15d21092198e8313f61dde9eea963"
+  name = "git.schwanenlied.me/yawning/chacha20"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "e3b1f968fc6397b51d963fee8ec8711a47bc0ce8"
+
+[[projects]]
+  branch = "master"
+  digest = "1:8fa55a6e302771a90a86ceae1ca3c0df4ef15d21092198e8313f61dde9eea963"
   name = "git.schwanenlied.me/yawning/chacha20.git"
   packages = ["."]
   pruneopts = "UT"
@@ -217,21 +225,23 @@
   version = "v3.2.0"
 
 [[projects]]
-  digest = "1:8a1124846910737b452dfd00a6f317e19e9fbb240d1a2bfe028c49a651e7d497"
+  digest = "1:bcff31f773bffa79cc06ed5187463317986c9d75b656bdedc7241371d315433e"
   name = "github.com/katzenpost/authority"
   packages = [
+    "internal/s11n",
     "nonvoting/client",
-    "nonvoting/internal/s11n",
-    "nonvoting/server",
     "nonvoting/server/config",
+    "voting/client",
+    "voting/server",
+    "voting/server/config",
   ]
   pruneopts = "UT"
-  revision = "b934a1263b5799e8433dee6c5fb5530d13dbb854"
-  version = "v0.0.4"
+  revision = "60573c04d513bf6e4c9acf6316130a93417c924e"
+  version = "v0.0.6"
 
 [[projects]]
-  branch = "reply_bookkeeping.0"
-  digest = "1:7f6708a3663213797876bb5095356fdd24e578750bc991734027f5a24fba7fad"
+  branch = "master"
+  digest = "1:d671acb038dfb24db83dce5bf883718248ad1151baec61ebdc9a3a2410a1dc4c"
   name = "github.com/katzenpost/client"
   packages = [
     ".",
@@ -244,10 +254,10 @@
     "utils",
   ]
   pruneopts = "UT"
-  revision = "89487ed8b86e2fa86946541b41b1b266bc377553"
+  revision = "e57ca6354a32b7479147e701fd05e729e6f3aa6e"
 
 [[projects]]
-  digest = "1:c8cb0526784fab3c74d6b72190558bc8f8ce080cf028a4226319422a6b227457"
+  digest = "1:797c4c6bcd10662d6a14127cae879926bd77886da2e98308ffe6a4cc649d78da"
   name = "github.com/katzenpost/core"
   packages = [
     "constants",
@@ -272,11 +282,11 @@
     "worker",
   ]
   pruneopts = "UT"
-  revision = "b5dbc0a6bff704a64d2deebfe1a928e6f7ea20d2"
-  version = "v0.0.4"
+  revision = "2abca1ed235658373bb316f590036865f13e2624"
+  version = "v0.0.5"
 
 [[projects]]
-  digest = "1:1db6735efabf423b871f553f8e39de2460b454eebe5f7f4b99b0b601eef4fd27"
+  digest = "1:4cc9a6a53d44f03bcfb766cf48bc1ed59cba80fdb7a0303a4260043934c120f7"
   name = "github.com/katzenpost/mailproxy"
   packages = [
     ".",
@@ -292,8 +302,8 @@
     "internal/recipient",
   ]
   pruneopts = "UT"
-  revision = "55d0f4b10f7c6c0617030e8db7e1398876986c45"
-  version = "v0.0.3"
+  revision = "bec20498b9dea74c3c1e7846a30de9cd6aa7cbd9"
+  version = "v0.0.4"
 
 [[projects]]
   digest = "1:354aba7b157c4e10efbce838f2e95743249d53fa395d59b1547de544c87f69ea"
@@ -348,7 +358,7 @@
   revision = "4b6922380b681550fb0d3a5bfd5e1e2898831a5f"
 
 [[projects]]
-  digest = "1:8d8824965dc55cafefe4ecb2a1b822f5652138e831e8cf8ebf3132b44b0e0e6a"
+  digest = "1:4b7ba6c946794664f88b041ddf26e0a7950e97a418f82505936137e305de8f22"
   name = "github.com/katzenpost/server"
   packages = [
     ".",
@@ -378,8 +388,8 @@
     "userdb/externuserdb",
   ]
   pruneopts = "UT"
-  revision = "3586a61e1d12304f641c393f80b4d6c9b7613282"
-  version = "v0.0.4"
+  revision = "dc85897386ae7acd5b108d0f8013f42cf1ebad89"
+  version = "v0.0.5"
 
 [[projects]]
   digest = "1:c658e84ad3916da105a761660dcaeb01e63416c8ec7bc62256a9b411a05fcd67"
@@ -439,7 +449,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:31edb4d78940dbba4252204be823bb43b00fd66977c15ec3d6f66893780df765"
+  digest = "1:d7a7b0d026cf16e1ea973b3e32b0214127c740e753cdff2c6a2567d8e06ad3b1"
   name = "golang.org/x/crypto"
   packages = [
     "argon2",
@@ -456,6 +466,7 @@
     "poly1305",
     "salsa20/salsa",
     "sha3",
+    "ssh/terminal",
   ]
   pruneopts = "UT"
   revision = "0e37d006457bf46f9e6692014ba72ef82c33022c"
@@ -480,11 +491,12 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:f154ed6bdd7f4d63e6d9feee4af669d3d0a340f1a5d8d77294e99edd12ba0e22"
+  digest = "1:ddbafa32d1899456edbf7a64aec7afe5aa287b840e6a12b996f8a8425c1d9a6a"
   name = "golang.org/x/sys"
   packages = [
     "cpu",
     "unix",
+    "windows",
   ]
   pruneopts = "UT"
   revision = "d641721ec2dead6fe5ca284096fe4b1fcd49e427"
@@ -610,8 +622,9 @@
     "github.com/emersion/go-message",
     "github.com/fatih/color",
     "github.com/hpcloud/tail",
-    "github.com/katzenpost/authority/nonvoting/server",
     "github.com/katzenpost/authority/nonvoting/server/config",
+    "github.com/katzenpost/authority/voting/server",
+    "github.com/katzenpost/authority/voting/server/config",
     "github.com/katzenpost/client",
     "github.com/katzenpost/client/config",
     "github.com/katzenpost/core/crypto/ecdh",
@@ -630,6 +643,7 @@
     "github.com/katzenpost/registration_client/mailproxy",
     "github.com/katzenpost/server",
     "github.com/katzenpost/server/config",
+    "golang.org/x/crypto/ssh/terminal",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1

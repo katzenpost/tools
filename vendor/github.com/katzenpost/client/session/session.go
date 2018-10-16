@@ -30,25 +30,20 @@ import (
 	"github.com/katzenpost/client/internal/pkiclient"
 	"github.com/katzenpost/client/poisson"
 	"github.com/katzenpost/client/utils"
-	cconstants "github.com/katzenpost/core/constants"
+	coreConstants "github.com/katzenpost/core/constants"
 	"github.com/katzenpost/core/crypto/ecdh"
-	"github.com/katzenpost/core/crypto/rand"
 	"github.com/katzenpost/core/log"
 	"github.com/katzenpost/core/pki"
 	"github.com/katzenpost/core/sphinx"
 	"github.com/katzenpost/core/sphinx/constants"
 	sConstants "github.com/katzenpost/core/sphinx/constants"
+	cutils "github.com/katzenpost/core/utils"
 	"github.com/katzenpost/core/worker"
 	"github.com/katzenpost/minclient"
 	"gopkg.in/op/go-logging.v1"
 )
 
-const (
-	surbTypeACK       = 0
-	surbTypeKaetzchen = 1
-	surbTypeInternal  = 2
-)
-
+// Session is the struct type that keeps state for a given session.
 type Session struct {
 	worker.Worker
 
@@ -61,23 +56,26 @@ type Session struct {
 	haltedCh   chan interface{}
 	haltOnce   sync.Once
 
-	// Poisson timers for λP, λD and λL Poisson processes
-	// as described in "The Loopix Anonymity System".
-	pTimer *poisson.PoissonTimer
-	dTimer *poisson.PoissonTimer
-	lTimer *poisson.PoissonTimer
+	// XXX Our client scheduler is different than specified in
+	// "The Loopix Anonymity System".
+	//
+	// We use λP a poisson process to control the interval between
+	// popping items off our send egress FIFO queue. If the queue is ever
+	// empty we send a decoy loop message.
+	pTimer *poisson.Fount
 
-	linkKey        *ecdh.PrivateKey
-	opCh           chan workerOp
-	onlineAt       time.Time
-	hasPKIDoc      bool
-	condGotPKIDoc  *sync.Cond
-	condGotConnect *sync.Cond
+	linkKey   *ecdh.PrivateKey
+	opCh      chan workerOp
+	onlineAt  time.Time
+	hasPKIDoc bool
 
-	egressQueue    EgressQueue
+	egressQueue     EgressQueue
+	egressQueueLock *sync.Mutex
+
 	surbIDMap      map[[sConstants.SURBIDLength]byte]*MessageRef
 	messageIDMap   map[[cConstants.MessageIDLength]byte]*MessageRef
 	replyNotifyMap map[[cConstants.MessageIDLength]byte]*sync.Mutex
+	mapLock        *sync.Mutex
 }
 
 // New establishes a session with provider using key.
@@ -113,13 +111,18 @@ func New(fatalErrCh chan error, logBackend *log.Backend, cfg *config.Config) (*S
 	s.surbIDMap = make(map[[sConstants.SURBIDLength]byte]*MessageRef)
 	s.messageIDMap = make(map[[cConstants.MessageIDLength]byte]*MessageRef)
 	s.replyNotifyMap = make(map[[cConstants.MessageIDLength]byte]*sync.Mutex)
+	s.mapLock = new(sync.Mutex)
+
 	s.egressQueue = new(Queue)
+	s.egressQueueLock = new(sync.Mutex)
 
-	// make some synchronised conditions
-	s.condGotPKIDoc = sync.NewCond(new(sync.Mutex))
-	s.condGotConnect = sync.NewCond(new(sync.Mutex))
+	id := cfg.Account.User + "@" + cfg.Account.Provider
+	basePath := filepath.Join(cfg.Proxy.DataDir, id)
+	if err := cutils.MkDataDir(basePath); err != nil {
+		return nil, err
+	}
 
-	err = s.loadKeys(cfg.Proxy.DataDir)
+	err = s.loadKeys(basePath)
 	if err != nil {
 		return nil, err
 	}
@@ -146,16 +149,50 @@ func New(fatalErrCh chan error, logBackend *log.Backend, cfg *config.Config) (*S
 		return nil, err
 	}
 
+	// block until we get the first PKI document
+	// and then set our timers accordingly
+	doc, err := s.awaitFirstPKIDoc()
+	if err != nil {
+		return nil, err
+	}
+	s.setTimers(doc)
+
 	s.Go(s.worker)
 	return s, nil
 }
 
+func (s *Session) awaitFirstPKIDoc() (*pki.Document, error) {
+	for {
+		var qo workerOp
+		select {
+		case <-s.HaltCh():
+			s.log.Debugf("Terminating gracefully.")
+			return nil, errors.New("Terminating gracefully.")
+		case <-time.After(time.Duration(s.cfg.Debug.InitialMaxPKIRetrievalDelay) * time.Second):
+			return nil, errors.New("Timeout failure awaiting first PKI document.")
+		case qo = <-s.opCh:
+		}
+		switch op := qo.(type) {
+		case opNewDocument:
+			// Determine if PKI doc is valid. If not then abort.
+			err := s.isDocValid(op.doc)
+			if err != nil {
+				s.log.Errorf("Aborting, PKI doc is not valid for the Loopix decoy traffic use case: %v", err)
+				err := fmt.Errorf("Aborting, PKI doc is not valid for the Loopix decoy traffic use case: %v", err)
+				s.fatalErrCh <- err
+				return nil, err
+			}
+			return op.doc, nil
+		default:
+			continue
+		}
+	}
+}
+
 func (s *Session) loadKeys(basePath string) error {
 	// Load link key.
-	linkPriv := filepath.Join(basePath, "link.private.pem")
-	linkPub := filepath.Join(basePath, "link.public.pem")
 	var err error
-	if s.linkKey, err = ecdh.Load(linkPriv, linkPub, rand.Reader); err != nil {
+	if s.linkKey, err = config.LoadLinkKey(basePath); err != nil {
 		s.log.Errorf("Failure to load link keys: %s", err)
 		return err
 	}
@@ -176,22 +213,13 @@ func (s *Session) GetService(serviceName string) (*utils.ServiceDescriptor, erro
 	return &serviceDescriptors[mrand.Intn(len(serviceDescriptors))], nil
 }
 
-func (s *Session) WaitForPKIDocument() {
-	s.condGotPKIDoc.L.Lock()
-	defer s.condGotPKIDoc.L.Unlock()
-	s.condGotPKIDoc.Wait()
-}
-
 // OnConnection will be called by the minclient api
 // upon connecting to the Provider
 func (s *Session) onConnection(err error) {
 	if err == nil {
-		s.condGotConnect.L.Lock()
 		s.opCh <- opConnStatusChanged{
 			isConnected: true,
 		}
-		s.condGotConnect.Broadcast()
-		s.condGotConnect.L.Unlock()
 	}
 }
 
@@ -208,6 +236,9 @@ func (s *Session) onACK(surbID *[constants.SURBIDLength]byte, ciphertext []byte)
 	idStr := fmt.Sprintf("[%v]", hex.EncodeToString(surbID[:]))
 	s.log.Infof("OnACK with SURBID %x", idStr)
 
+	s.mapLock.Lock()
+	defer s.mapLock.Unlock()
+
 	msgRef, ok := s.surbIDMap[*surbID]
 	if !ok {
 		s.log.Debug("wtf, received reply with unexpected SURBID")
@@ -216,7 +247,7 @@ func (s *Session) onACK(surbID *[constants.SURBIDLength]byte, ciphertext []byte)
 	_, ok = s.replyNotifyMap[*msgRef.ID]
 	if !ok {
 		s.log.Infof("wtf, received reply with no reply notification mutex, map len is %d", len(s.replyNotifyMap))
-		for key, _ := range s.replyNotifyMap {
+		for key := range s.replyNotifyMap {
 			s.log.Infof("key %x", key)
 		}
 		return nil
@@ -227,15 +258,15 @@ func (s *Session) onACK(surbID *[constants.SURBIDLength]byte, ciphertext []byte)
 		s.log.Infof("SURB Reply decryption failure: %s", err)
 		return err
 	}
-	if len(plaintext) != cconstants.ForwardPayloadLength {
+	if len(plaintext) != coreConstants.ForwardPayloadLength {
 		s.log.Warningf("Discarding SURB %v: Invalid payload size: %v", idStr, len(plaintext))
 		return nil
 	}
 
 	switch msgRef.SURBType {
-	case surbTypeACK:
+	case cConstants.SurbTypeACK:
 		// XXX TODO fix me
-	case surbTypeKaetzchen, surbTypeInternal:
+	case cConstants.SurbTypeKaetzchen, cConstants.SurbTypeInternal:
 		msgRef.Reply = plaintext[2:]
 		s.replyNotifyMap[*msgRef.ID].Unlock()
 	default:
@@ -247,10 +278,7 @@ func (s *Session) onACK(surbID *[constants.SURBIDLength]byte, ciphertext []byte)
 func (s *Session) onDocument(doc *pki.Document) {
 	s.log.Debugf("onDocument(): Epoch %v", doc.Epoch)
 	s.hasPKIDoc = true
-	s.condGotPKIDoc.L.Lock()
 	s.opCh <- opNewDocument{
 		doc: doc,
 	}
-	s.condGotPKIDoc.Broadcast()
-	s.condGotPKIDoc.L.Unlock()
 }

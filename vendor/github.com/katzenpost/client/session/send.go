@@ -28,27 +28,56 @@ import (
 	sConstants "github.com/katzenpost/core/sphinx/constants"
 )
 
+// MessageRef is a message reference which is used to match future
+// received SURN replies.
 type MessageRef struct {
-	ID        *[cConstants.MessageIDLength]byte
+	// ID is the message identifier
+	ID *[cConstants.MessageIDLength]byte
+
+	// Recipient is the message recipient
 	Recipient string
-	Provider  string
-	Payload   []byte
-	SentAt    time.Time
-	ReplyETA  time.Duration
-	WithSURB  bool
-	SURBID    *[sConstants.SURBIDLength]byte
-	Key       []byte
-	Reply     []byte
-	SURBType  int
+
+	// Provider is the recipient Provider
+	Provider string
+
+	// Payload is the message payload
+	Payload []byte
+
+	// SentAt contains the time the message was sent.
+	SentAt time.Time
+
+	// ReplyETA is the expected round trip time to receive a response.
+	ReplyETA time.Duration
+
+	// WithSURB is set to true if a message is sent with a SURB.
+	WithSURB bool
+
+	// SURBID is the SURB identifier.
+	SURBID *[sConstants.SURBIDLength]byte
+
+	// Key is the SURB decryption keys
+	Key []byte
+
+	// Reply is the SURB reply
+	Reply []byte
+
+	// SURBType is the SURB type.
+	SURBType int
 }
 
 // WaitForReply blocks until a reply is received.
 func (s *Session) WaitForReply(msgRef *MessageRef) []byte {
-	s.replyNotifyMap[*msgRef.ID].Lock()
+	s.mapLock.Lock()
+	replyLock := s.replyNotifyMap[*msgRef.ID]
+	s.mapLock.Unlock()
+	replyLock.Lock()
 	return s.messageIDMap[*msgRef.ID].Reply
 }
 
 func (s *Session) sendNext() error {
+	s.egressQueueLock.Lock()
+	defer s.egressQueueLock.Unlock()
+
 	msgRef, err := s.egressQueue.Peek()
 	if err != nil {
 		return err
@@ -76,6 +105,10 @@ func (s *Session) send(msgRef *MessageRef) error {
 		msgRef.Key = key
 		msgRef.SentAt = time.Now()
 		msgRef.ReplyETA = eta
+
+		s.mapLock.Lock()
+		defer s.mapLock.Unlock()
+
 		s.surbIDMap[surbID] = msgRef
 		s.messageIDMap[*msgRef.ID] = msgRef
 	} else {
@@ -113,6 +146,7 @@ func (s *Session) sendLoop(withSURB bool) error {
 	return s.send(msgRef)
 }
 
+// SendUnreliable send a message without any automatic retransmission.
 func (s *Session) SendUnreliable(recipient, provider string, message []byte) (*MessageRef, error) {
 	s.log.Debugf("Send")
 	id := [cConstants.MessageIDLength]byte{}
@@ -124,10 +158,15 @@ func (s *Session) SendUnreliable(recipient, provider string, message []byte) (*M
 		Payload:   message,
 		WithSURB:  false,
 	}
+
+	s.egressQueueLock.Lock()
+	defer s.egressQueueLock.Unlock()
+
 	err := s.egressQueue.Push(&msgRef)
 	return &msgRef, err
 }
 
+// SendKaetzchenQuery sends a mixnet provider-side service query.
 func (s *Session) SendKaetzchenQuery(recipient, provider string, message []byte, wantResponse bool) (*MessageRef, error) {
 	if provider == "" {
 		panic("wtf")
@@ -147,10 +186,18 @@ func (s *Session) SendKaetzchenQuery(recipient, provider string, message []byte,
 		Provider:  provider,
 		Payload:   payload,
 		WithSURB:  wantResponse,
-		SURBType:  surbTypeKaetzchen,
+		SURBType:  cConstants.SurbTypeKaetzchen,
 	}
+
+	s.mapLock.Lock()
+	defer s.mapLock.Unlock()
+
 	s.replyNotifyMap[*msgRef.ID] = new(sync.Mutex)
 	s.replyNotifyMap[*msgRef.ID].Lock()
+
+	s.egressQueueLock.Lock()
+	defer s.egressQueueLock.Unlock()
+
 	err := s.egressQueue.Push(&msgRef)
 	return &msgRef, err
 }

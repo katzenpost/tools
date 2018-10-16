@@ -24,15 +24,19 @@ import (
 	"net"
 	"net/mail"
 	"net/url"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/katzenpost/authority/voting/server/config"
+	"github.com/katzenpost/core/crypto/ecdh"
 	"github.com/katzenpost/core/crypto/eddsa"
 	"github.com/katzenpost/core/pki"
 	"github.com/katzenpost/core/utils"
+	"github.com/ugorji/go/codec"
 	"golang.org/x/net/idna"
 	"golang.org/x/text/secure/precis"
 )
@@ -421,7 +425,7 @@ type Kaetzchen struct {
 
 func (kCfg *Kaetzchen) validate() error {
 	if kCfg.Capability == "" {
-		return fmt.Errorf("config: Kaetzchen: Capability is invalid.")
+		return fmt.Errorf("config: Kaetzchen: Capability is invalid")
 	}
 
 	// Ensure the endpoint is normalized.
@@ -468,7 +472,7 @@ type PluginKaetzchen struct {
 
 func (kCfg *PluginKaetzchen) validate() error {
 	if kCfg.Capability == "" {
-		return fmt.Errorf("config: Kaetzchen: Capability is invalid.")
+		return fmt.Errorf("config: Kaetzchen: Capability is invalid")
 	}
 
 	// Ensure the endpoint is normalized.
@@ -480,7 +484,7 @@ func (kCfg *PluginKaetzchen) validate() error {
 		return fmt.Errorf("config: Kaetzchen: '%v' has non-normalized endpoint %v", kCfg.Capability, kCfg.Endpoint)
 	}
 	if kCfg.Command == "" {
-		return fmt.Errorf("config: Kaetzchen: Command is invalid.")
+		return fmt.Errorf("config: Kaetzchen: Command is invalid")
 	}
 	if _, err = mail.ParseAddress(kCfg.Endpoint + "@test.invalid"); err != nil {
 		return fmt.Errorf("config: Kaetzchen: '%v' has non local-part endpoint '%v': %v", kCfg.Capability, kCfg.Endpoint, err)
@@ -552,11 +556,11 @@ func (pCfg *Provider) validate() error {
 	}
 
 	for k, v := range pCfg.AltAddresses {
-		kLower := strings.ToLower(k)
-		if internalTransports[kLower] {
-			return fmt.Errorf("config: Provider: AltAddress is overriding internal transport: %v", kLower)
+		lowkey := strings.ToLower(k)
+		if internalTransports[lowkey] {
+			return fmt.Errorf("config: Provider: AltAddress is overriding internal transport: %v", lowkey)
 		}
-		switch pki.Transport(kLower) {
+		switch pki.Transport(lowkey) {
 		case pki.TransportTCP:
 			for _, a := range v {
 				h, p, err := net.SplitHostPort(a)
@@ -650,13 +654,22 @@ func (pCfg *Provider) validate() error {
 // PKI is the Katzenpost directory authority configuration.
 type PKI struct {
 	// Nonvoting is a non-voting directory authority.
-	Nonvoting *Nonvoting
+	Nonvoting   *Nonvoting
+	Voting      *Voting
 }
 
 func (pCfg *PKI) validate() error {
 	nrCfg := 0
+	if pCfg.Nonvoting != nil && pCfg.Voting != nil {
+		return errors.New("pki config failure: cannot configure voting and nonvoting pki")
+	}
 	if pCfg.Nonvoting != nil {
 		if err := pCfg.Nonvoting.validate(); err != nil {
+			return err
+		}
+		nrCfg++
+	} else {
+		if err := pCfg.Voting.validate(); err != nil {
 			return err
 		}
 		nrCfg++
@@ -686,6 +699,68 @@ func (nCfg *Nonvoting) validate() error {
 		return fmt.Errorf("config: PKI/Nonvoting: Invalid PublicKey: %v", err)
 	}
 
+	return nil
+}
+
+// Peer is a voting peer.
+type Peer struct {
+	Addresses         []string
+	IdentityPublicKey string
+	LinkPublicKey     string
+}
+
+func (p *Peer) validate() error {
+	for _, address := range p.Addresses {
+		if err := utils.EnsureAddrIPPort(address); err != nil {
+			return fmt.Errorf("Voting Peer: Address is invalid: %v", err)
+		}
+	}
+	var pubKey eddsa.PublicKey
+	if err := pubKey.FromString(p.IdentityPublicKey); err != nil {
+		return fmt.Errorf("Voting Peer: Invalid IdentityPublicKey: %v", err)
+	}
+	if err := pubKey.FromString(p.LinkPublicKey); err != nil {
+		return fmt.Errorf("Voting Peer: Invalid LinkPublicKey: %v", err)
+	}
+	return nil
+}
+
+// Voting is a voting directory authority.
+type Voting struct {
+	Peers []*Peer
+}
+
+// AuthorityPeersFromPeers loads keys and instances config.AuthorityPeer for each Peer
+func AuthorityPeersFromPeers(peers []*Peer) ([]*config.AuthorityPeer, error) {
+	authPeers := []*config.AuthorityPeer{}
+	for _, peer := range peers {
+		linkKey := new(ecdh.PublicKey)
+		err := linkKey.UnmarshalText([]byte(peer.LinkPublicKey))
+		if err != nil {
+			return nil, err
+		}
+		identityKey := new(eddsa.PublicKey)
+		err = identityKey.UnmarshalText([]byte(peer.IdentityPublicKey))
+		if err != nil {
+			return nil, err
+		}
+		authPeer := &config.AuthorityPeer{
+			IdentityPublicKey: identityKey,
+			LinkPublicKey:     linkKey,
+			Addresses:         peer.Addresses,
+		}
+		authPeers = append(authPeers, authPeer)
+	}
+	return authPeers, nil
+}
+
+func (vCfg *Voting) validate() error {
+	for _, peer := range vCfg.Peers {
+		err := peer.validate()
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -781,6 +856,23 @@ func (cfg *Config) FixupAndValidate() error {
 	}
 
 	return nil
+}
+
+// Store writes a config to fileName on disk
+func Store(cfg *Config, fileName string) error {
+	f, err := os.Open(fileName)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	// Serialize the descriptor.
+	var serialized []byte
+	enc := codec.NewEncoderBytes(&serialized, new(codec.JsonHandle))
+	if err := enc.Encode(cfg); err != nil {
+		return err
+	}
+	_, err = f.Write(serialized)
+	return err
 }
 
 // Load parses and validates the provided buffer b as a config file body and

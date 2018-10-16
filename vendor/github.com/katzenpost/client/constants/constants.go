@@ -20,3 +20,14 @@ const (
 	// MessageIDLength is the length of a message ID in bytes.
 	MessageIDLength = 16
 )
+
+const (
+	// SurbTypeACK is used to denote an ACK in response to a forward message.
+	SurbTypeACK = 0
+
+	// SurbTypeKaetzchen is used to denote a mixnet service query response.
+	SurbTypeKaetzchen = 1
+
+	// SurbTypeInternal is used to reserve an internal SURB reply type.
+	SurbTypeInternal = 2
+)

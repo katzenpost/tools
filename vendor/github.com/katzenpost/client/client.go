@@ -35,7 +35,7 @@ type Client struct {
 	log        *logging.Logger
 	fatalErrCh chan error
 	haltedCh   chan interface{}
-	haltOnce   sync.Once
+	haltOnce   *sync.Once
 
 	session *session.Session
 }
@@ -56,6 +56,7 @@ func (c *Client) initLogging() error {
 	return err
 }
 
+// GetLogger returns a new logger with the given name.
 func (c *Client) GetLogger(name string) *logging.Logger {
 	return c.logBackend.GetLogger(name)
 }
@@ -72,14 +73,18 @@ func (c *Client) Wait() {
 
 func (c *Client) halt() {
 	c.log.Noticef("Starting graceful shutdown.")
-	c.session.Halt()
+	if c.session != nil {
+		c.session.Halt()
+	}
 	close(c.fatalErrCh)
 	close(c.haltedCh)
 }
 
+// NewSession creates and returns a new session or an error.
 func (c *Client) NewSession() (*session.Session, error) {
-	session, err := session.New(c.fatalErrCh, c.logBackend, c.cfg)
-	return session, err
+	var err error
+	c.session, err = session.New(c.fatalErrCh, c.logBackend, c.cfg)
+	return c.session, err
 }
 
 // New creates a new Client with the provided configuration.
@@ -88,12 +93,19 @@ func New(cfg *config.Config) (*Client, error) {
 	c.cfg = cfg
 	c.fatalErrCh = make(chan error)
 	c.haltedCh = make(chan interface{})
+	c.haltOnce = new(sync.Once)
 
 	// Do the early initialization and bring up logging.
 	if err := utils.MkDataDir(c.cfg.Proxy.DataDir); err != nil {
 		return nil, err
 	}
 	if err := c.initLogging(); err != nil {
+		return nil, err
+	}
+
+	// Ensure we generate keys if the user requested it.
+	if c.cfg.Debug.GenerateOnly {
+		err := config.GenerateKeys(c.cfg)
 		return nil, err
 	}
 
