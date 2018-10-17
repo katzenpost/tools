@@ -1,6 +1,6 @@
 - name: create source path
   file:
-    path: "{{ buildDir }}/go/src/github.com/katzenpost/daemons"
+    path: "{{ buildDir }}/go/src/github.com/katzenpost/mailproxy_release"
     state: directory
 
 - name: clone the mailproxy_release repository
@@ -23,7 +23,7 @@
     PATH: "{{ buildDir }}/go/bin:{{ ansible_env.PATH }}"
   command: go install
   args:
-    chdir: "{{ buildDir }}/go/src/github.com/katzenpost/daemons/authority/mailproxy_release"
+    chdir: "{{ buildDir }}/go/src/github.com/katzenpost/mailproxy_release"
 
 - name: fetch mailproxy binary
   fetch:
