@@ -7,7 +7,7 @@
   git:
     repo: https://github.com/katzenpost/mailproxy_release
     dest: "{{ buildDir }}/go/src/github.com/katzenpost/mailproxy_release"
-    version: voting_release
+    version: "{{ releaseVersion }}"
 
 - name: run dep ensure
   environment:

@@ -15,6 +15,7 @@
   vars:
     buildTime: "{{ ansible_date_time.iso8601_basic }}"
     buildDir: "{{ ansible_env.PWD }}/{{ buildTime }}"
+    releaseVersion: "release_candidate.0"
 
 - name: Install/Update katzenpost on Authority
   remote_user: root

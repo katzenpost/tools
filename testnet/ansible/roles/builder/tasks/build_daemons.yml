@@ -7,7 +7,7 @@
   git:
     repo: https://github.com/katzenpost/daemons
     dest: "{{ buildDir }}/go/src/github.com/katzenpost/daemons"
-    version: voting_release
+    version: "{{ releaseVersion }}"
 
 - name: run dep ensure
   environment:
