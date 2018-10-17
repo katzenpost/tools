@@ -1,0 +1,60 @@
+- name: create source path
+  file:
+    path: "{{ buildDir }}/go/src/github.com/katzenpost/daemons"
+    state: directory
+
+- name: clone the daemons repository
+  git:
+    repo: https://github.com/katzenpost/daemons
+    dest: "{{ buildDir }}/go/src/github.com/katzenpost/daemons"
+    version: voting_release
+
+- name: run dep ensure
+  environment:
+    GOPATH: "{{ buildDir }}/go"
+    PATH: "{{ buildDir }}/go/bin:{{ ansible_env.PATH }}"
+  command: dep ensure
+  args:
+    chdir: "{{ buildDir }}/go/src/github.com/katzenpost/daemons"
+
+- name: go install nonvoting authority
+  environment:
+    GOPATH: "{{ buildDir }}/go"
+    PATH: "{{ buildDir }}/go/bin:{{ ansible_env.PATH }}"
+  command: go install
+  args:
+    chdir: "{{ buildDir }}/go/src/github.com/katzenpost/daemons/authority/nonvoting"
+
+- name: fetch nonvoting binary
+  fetch:
+    src: "{{ buildDir }}/go/bin/nonvoting"
+    flat: yes
+    dest: latest/nonvoting
+
+- name: go install voting authority
+  environment:
+    GOPATH: "{{ buildDir }}/go"
+    PATH: "{{ buildDir }}/go/bin:{{ ansible_env.PATH }}"
+  command: go install
+  args:
+    chdir: "{{ buildDir }}/go/src/github.com/katzenpost/daemons/authority/voting"
+
+- name: fetch voting binary
+  fetch:
+    src: "{{ buildDir }}/go/bin/voting"
+    flat: yes
+    dest: latest/voting
+
+- name: go install server
+  environment:
+    GOPATH: "{{ buildDir }}/go"
+    PATH: "{{ buildDir }}/go/bin:{{ ansible_env.PATH }}"
+  command: go install
+  args:
+    chdir: "{{ buildDir }}/go/src/github.com/katzenpost/daemons/server"
+
+- name: fetch server binary
+  fetch:
+    src: "{{ buildDir }}/go/bin/server"
+    flat: yes
+    dest: latest/server

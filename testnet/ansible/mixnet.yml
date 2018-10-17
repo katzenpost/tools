@@ -15,9 +15,6 @@
   vars:
     buildTime: "{{ ansible_date_time.iso8601_basic }}"
     buildDir: "{{ ansible_env.PWD }}/{{ buildTime }}"
-    serverDestPath: "{{ buildDir}}/server"
-    nonvotingAuthorityDestPath: "{{ buildDir}}/nonvoting"
-    votingAuthorityDestPath: "{{ buildDir}}/voting"
 
 - name: Install/Update katzenpost on Authority
   remote_user: root

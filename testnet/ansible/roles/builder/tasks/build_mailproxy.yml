@@ -1,0 +1,32 @@
+- name: create source path
+  file:
+    path: "{{ buildDir }}/go/src/github.com/katzenpost/daemons"
+    state: directory
+
+- name: clone the mailproxy_release repository
+  git:
+    repo: https://github.com/katzenpost/mailproxy_release
+    dest: "{{ buildDir }}/go/src/github.com/katzenpost/mailproxy_release"
+    version: voting_release
+
+- name: run dep ensure
+  environment:
+    GOPATH: "{{ buildDir }}/go"
+    PATH: "{{ buildDir }}/go/bin:{{ ansible_env.PATH }}"
+  command: dep ensure
+  args:
+    chdir: "{{ buildDir }}/go/src/github.com/katzenpost/mailproxy_release"
+
+- name: go install mailproxy
+  environment:
+    GOPATH: "{{ buildDir }}/go"
+    PATH: "{{ buildDir }}/go/bin:{{ ansible_env.PATH }}"
+  command: go install
+  args:
+    chdir: "{{ buildDir }}/go/src/github.com/katzenpost/daemons/authority/mailproxy_release"
+
+- name: fetch mailproxy binary
+  fetch:
+    src: "{{ buildDir }}/go/bin/server"
+    flat: yes
+    dest: latest/mailproxy
