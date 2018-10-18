@@ -7,8 +7,12 @@
   roles:
     - build_dependencies
 
+- name: Add build user
+  user:
+    name: builder
+
 - name: Build katzenpost binaries
-  remote_user: masala
+  remote_user: builder
   hosts: Builder
   roles:
     - builder
