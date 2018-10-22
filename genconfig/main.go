@@ -24,7 +24,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/BurntSushi/toml"
 	vConfig "github.com/katzenpost/authority/voting/server/config"
@@ -32,9 +31,7 @@ import (
 	"github.com/katzenpost/core/crypto/ecdh"
 	"github.com/katzenpost/core/crypto/eddsa"
 	"github.com/katzenpost/core/crypto/rand"
-	"github.com/katzenpost/mailproxy"
 	pConfig "github.com/katzenpost/mailproxy/config"
-	"github.com/katzenpost/mailproxy/event"
 	sConfig "github.com/katzenpost/server/config"
 )
 
@@ -322,7 +319,7 @@ func (s *katzenpost) generateVotingWhitelist() ([]*vConfig.Node, []*vConfig.Node
 	return providers, mixes, nil
 }
 
-func (s *katzenpost) newMailProxy(user, provider string, privateKey *ecdh.PrivateKey) (*mailproxy.Proxy, error) {
+func (s *katzenpost) newMailProxy(user, provider string, privateKey *ecdh.PrivateKey) (*pConfig.Config, error) {
 	const (
 		proxyLogFile = "katzenpost.log"
 		authID       = "testAuth"
@@ -339,7 +336,6 @@ func (s *katzenpost) newMailProxy(user, provider string, privateKey *ecdh.Privat
 	cfg.Proxy.SMTPAddress = fmt.Sprintf("127.0.0.1:%d", s.lastPort)
 	s.lastPort++
 	cfg.Proxy.DataDir = filepath.Join(s.baseDir, dispName)
-	cfg.Proxy.EventSink = make(chan event.Event)
 
 	// Logging section.
 	cfg.Logging = new(pConfig.Logging)
@@ -383,30 +379,7 @@ func (s *katzenpost) newMailProxy(user, provider string, privateKey *ecdh.Privat
 	if err := cfg.FixupAndValidate(); err != nil {
 		return nil, err
 	}
-
-	p, err := mailproxy.New(cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	go func() {
-		for ev := range cfg.Proxy.EventSink {
-			log.Printf("%v: Event: %+v", dispName, ev)
-			switch e := ev.(type) {
-			case *event.KaetzchenReplyEvent:
-				// Just assume this is a keyserver query for now.
-				if u, k, err := p.ParseKeyQueryResponse(e.Payload); err != nil {
-					log.Printf("%v: Keyserver query failed: %v", dispName, err)
-				} else {
-					log.Printf("%v: Keyserver reply: %v -> %v", dispName, u, k)
-				}
-			default:
-			}
-		}
-	}()
-
-
-	return p, nil
+	return cfg, nil
 }
 
 func main() {
