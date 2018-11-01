@@ -1,0 +1,33 @@
+
+[Proxy]
+  DataDir = "/home/user/mixnet/spray_datadir"
+
+[Logging]
+  Disable = false
+  Level = "DEBUG"
+
+[NonvotingAuthority]
+    Address = "127.0.0.1:29483"
+    PublicKey = "o4w1Nyj/nKNwho5SWfAIfh7SMU8FRx52nMHGgYsMHqQ="
+
+[Account]
+  User = "alice"
+  Provider = "provider1"
+  ProviderKeyPin = "imigzI26tTRXyYLXujLEPI9QrNYOEgC4DElsFdP9acQ="
+
+[Debug]
+  TargetProvider = "provider1"
+  TargetRecipient = "+loop"
+  SendBurst = 40
+  SendRate = 10
+  CaseSensitiveUserIdentifiers = false
+  GenerateOnly = false
+  PollingInterval = 10
+  EnableLoops = false
+  LambdaL = 0.00015
+  LambdaLMax = 60000
+  LambdaLShift = 20000
+  LambdaD = 0.00015
+  LambdaDMax = 90000
+  LambdaDShift = 20000
+  

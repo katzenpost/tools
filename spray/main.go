@@ -18,14 +18,12 @@ package main
 
 import (
 	"flag"
-	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/katzenpost/client"
 	"github.com/katzenpost/client/config"
-)
-
-const (
-	pingService = "loop"
 )
 
 func main() {
@@ -56,17 +54,23 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	s, err := c.NewSession()
+	_, err = c.NewSession()
 	if err != nil {
 		panic(err)
 	}
 
-	serviceDesc, err := s.GetService(pingService)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(serviceDesc.Name, serviceDesc.Provider)
+	// Setup the signal handling.
+	ch := make(chan os.Signal)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
 
-	fmt.Println("Done. Shutting down.")
-	c.Shutdown()
+	// Halt the proxy gracefully on SIGINT/SIGTERM, and scan RecipientDir on SIGHUP.
+	go func() {
+		for {
+			<-ch
+			c.Shutdown()
+			return
+		}
+	}()
+
+	c.Wait()
 }
