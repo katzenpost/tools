@@ -18,6 +18,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 
 	"github.com/katzenpost/client"
@@ -88,8 +89,10 @@ func main() {
 	}
 
 	// send the zcash transaction
-	err = session.SendUnreliable(zcashService.Name, zcashService.Provider, zcashRequest)
+	mesgRef, err := session.SendUnreliable(zcashService.Name, zcashService.Provider, zcashRequest)
 	if err != nil {
 		panic(err)
 	}
+	reply := session.WaitForReply(mesgRef)
+	fmt.Printf("reply: %s", reply)
 }
