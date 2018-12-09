@@ -19,7 +19,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
 
 	"github.com/katzenpost/client"
 	"github.com/katzenpost/client/config"
@@ -27,9 +26,8 @@ import (
 )
 
 const (
-	zcashService     = "zcash"
+	zcashService     = "zec"
 	zcashSendVersion = 0
-	walletCfgEnvVar  = "WALLETCFG"
 )
 
 var (
@@ -42,22 +40,24 @@ type zcashSendRequest struct {
 }
 
 func main() {
+	cfgFile := flag.String("f", "katzenpost.toml", "Path to the server config file.")
 	genOnly := flag.Bool("g", false, "Generate the keys and exit immediately.")
+	txBlob := flag.String("t", "", "tx hex blob to send")
 	flag.Parse()
 
 	if *genOnly {
-		_, err := config.LoadFile(os.Getenv(walletCfgEnvVar), *genOnly)
+		_, err := config.LoadFile(*cfgFile, *genOnly)
 		if err != nil {
 			panic(err)
 		}
 		return
 	}
 
-	if len(os.Args) != 2 {
-		panic("must specify tx hex blob as the only argument")
+	if *txBlob == "" {
+		panic("must specify tx hex blob")
 	}
 
-	cfg, err := config.LoadFile(os.Getenv(walletCfgEnvVar), *genOnly)
+	cfg, err := config.LoadFile(*cfgFile, *genOnly)
 	if err != nil {
 		panic(err)
 	}
@@ -73,10 +73,9 @@ func main() {
 	}
 
 	// serialize our transaction inside a zcash kaetzpost request message
-	hexTx := os.Args[1]
 	var req = zcashSendRequest{
 		Version: zcashSendVersion,
-		Tx:      hexTx,
+		Tx:      *txBlob,
 	}
 	var zcashRequest []byte
 	enc := codec.NewEncoderBytes(&zcashRequest, &jsonHandle)
