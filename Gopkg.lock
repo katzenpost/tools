@@ -225,19 +225,20 @@
   version = "v3.2.0"
 
 [[projects]]
-  digest = "1:bcff31f773bffa79cc06ed5187463317986c9d75b656bdedc7241371d315433e"
+  digest = "1:d933eca5fdbfaedb996f8c955107b6669c6ba72d5a75be17cab42833b7c10db8"
   name = "github.com/katzenpost/authority"
   packages = [
     "internal/s11n",
     "nonvoting/client",
+    "nonvoting/server",
     "nonvoting/server/config",
     "voting/client",
     "voting/server",
     "voting/server/config",
   ]
   pruneopts = "UT"
-  revision = "60573c04d513bf6e4c9acf6316130a93417c924e"
-  version = "v0.0.6"
+  revision = "37313cf0f4143b5621f8dd53b5d8b397870b7c29"
+  version = "v0.0.7"
 
 [[projects]]
   branch = "master"
@@ -257,7 +258,7 @@
   revision = "e57ca6354a32b7479147e701fd05e729e6f3aa6e"
 
 [[projects]]
-  digest = "1:797c4c6bcd10662d6a14127cae879926bd77886da2e98308ffe6a4cc649d78da"
+  digest = "1:b198e03d62ca628d4ab31a88e737faa11e4699e2b228951f55982f2383459d55"
   name = "github.com/katzenpost/core"
   packages = [
     "constants",
@@ -282,11 +283,11 @@
     "worker",
   ]
   pruneopts = "UT"
-  revision = "2abca1ed235658373bb316f590036865f13e2624"
-  version = "v0.0.5"
+  revision = "0213ae4e0d0ee7a53f238e39535430bfeb49cfc2"
+  version = "v0.0.6"
 
 [[projects]]
-  digest = "1:4cc9a6a53d44f03bcfb766cf48bc1ed59cba80fdb7a0303a4260043934c120f7"
+  digest = "1:1c3640d956aeb260c55a6de3a447d7d15ccc767c92cc14eca2a431dac6e17cdd"
   name = "github.com/katzenpost/mailproxy"
   packages = [
     ".",
@@ -302,8 +303,8 @@
     "internal/recipient",
   ]
   pruneopts = "UT"
-  revision = "bec20498b9dea74c3c1e7846a30de9cd6aa7cbd9"
-  version = "v0.0.4"
+  revision = "99635c060607652e59d74e2f53462fa0d2840084"
+  version = "v0.0.5"
 
 [[projects]]
   digest = "1:354aba7b157c4e10efbce838f2e95743249d53fa395d59b1547de544c87f69ea"
@@ -358,7 +359,7 @@
   revision = "4b6922380b681550fb0d3a5bfd5e1e2898831a5f"
 
 [[projects]]
-  digest = "1:4b7ba6c946794664f88b041ddf26e0a7950e97a418f82505936137e305de8f22"
+  digest = "1:5c5fd30df6181f3e02478337f281022534e390bd77324851dbee24b17544fe11"
   name = "github.com/katzenpost/server"
   packages = [
     ".",
@@ -388,8 +389,8 @@
     "userdb/externuserdb",
   ]
   pruneopts = "UT"
-  revision = "dc85897386ae7acd5b108d0f8013f42cf1ebad89"
-  version = "v0.0.5"
+  revision = "870960324fc553f54da4645edc081dc35d269a29"
+  version = "v0.0.6"
 
 [[projects]]
   digest = "1:c658e84ad3916da105a761660dcaeb01e63416c8ec7bc62256a9b411a05fcd67"
@@ -622,6 +623,7 @@
     "github.com/emersion/go-message",
     "github.com/fatih/color",
     "github.com/hpcloud/tail",
+    "github.com/katzenpost/authority/nonvoting/server",
     "github.com/katzenpost/authority/nonvoting/server/config",
     "github.com/katzenpost/authority/voting/server",
     "github.com/katzenpost/authority/voting/server/config",
@@ -643,6 +645,7 @@
     "github.com/katzenpost/registration_client/mailproxy",
     "github.com/katzenpost/server",
     "github.com/katzenpost/server/config",
+    "github.com/ugorji/go/codec",
     "golang.org/x/crypto/ssh/terminal",
   ]
   solver-name = "gps-cdcl"
