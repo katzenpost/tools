@@ -31,7 +31,6 @@ import (
 	"runtime/pprof"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/hpcloud/tail"
 	vServer "github.com/katzenpost/authority/voting/server"
@@ -116,12 +115,7 @@ func (s *kimchi) initLogging() error {
 }
 
 func (s *kimchi) genVotingAuthoritiesCfg(numAuthorities int) error {
-	parameters := &vConfig.Parameters{
-		MixLambda:       1,
-		MixMaxDelay:     10000,
-		SendLambda:      123,
-		SendMaxInterval: 123456,
-	}
+	parameters := &vConfig.Parameters{}
 	configs := []*vConfig.Config{}
 
 	// initial generation of key material for each authority
@@ -564,9 +558,6 @@ func main() {
 
 	now, elapsed, till := epochtime.Now()
 	log.Printf("Epoch: %v (Elapsed: %v, Till: %v)", now, elapsed, till)
-	if till < epochtime.Period-(3600*time.Second) {
-		log.Printf("WARNING: Descriptor publication for the next epoch will FAIL.")
-	}
 
 	// Generate the authority configs
 	if *voting {
