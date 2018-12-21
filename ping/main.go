@@ -67,14 +67,13 @@ func main() {
 	}
 	fmt.Println(serviceDesc.Name, serviceDesc.Provider)
 
-	wantReply := true
-	msgRef, err := s.SendKaetzchenQuery(serviceDesc.Name, serviceDesc.Provider, []byte("hello"), wantReply)
+	msgId, err := s.SendUnreliableQuery(serviceDesc.Name, serviceDesc.Provider, []byte("hello"))
 	if err != nil {
 		panic(err)
 	}
 
 	fmt.Println("Awaiting reply...")
-	s.WaitForReply(msgRef)
+	s.WaitForReply(msgId)
 	fmt.Println("Done. Shutting down.")
 	c.Shutdown()
 }
