@@ -22,12 +22,13 @@ import (
 
 	"github.com/katzenpost/client"
 	"github.com/katzenpost/client/config"
+	"github.com/katzenpost/server_plugins/currency/common"
 	"github.com/ugorji/go/codec"
 )
 
 const (
-	zcashService     = "zec"
-	zcashSendVersion = 0
+	zcashService = "zec"
+	zcashTicker  = "ZEC"
 )
 
 var (
@@ -42,7 +43,7 @@ type zcashSendRequest struct {
 func main() {
 	cfgFile := flag.String("f", "katzenpost.toml", "Path to the server config file.")
 	genOnly := flag.Bool("g", false, "Generate the keys and exit immediately.")
-	txBlob := flag.String("t", "", "tx hex blob to send")
+	hexBlob := flag.String("t", "", "Transaction hex blob to send.")
 	flag.Parse()
 
 	if *genOnly {
@@ -53,7 +54,7 @@ func main() {
 		return
 	}
 
-	if *txBlob == "" {
+	if *hexBlob == "" {
 		panic("must specify tx hex blob")
 	}
 
@@ -63,23 +64,18 @@ func main() {
 	}
 
 	// create a client and connect to the mixnet Provider
-	_client, err := client.New(cfg)
+	c, err := client.New(cfg)
 	if err != nil {
 		panic(err)
 	}
-	session, err := _client.NewSession()
+	session, err := c.NewSession()
 	if err != nil {
 		panic(err)
 	}
 
 	// serialize our transaction inside a zcash kaetzpost request message
-	var req = zcashSendRequest{
-		Version: zcashSendVersion,
-		Tx:      *txBlob,
-	}
-	var zcashRequest []byte
-	enc := codec.NewEncoderBytes(&zcashRequest, &jsonHandle)
-	enc.Encode(req)
+	req := common.NewRequest(zcashTicker, *hexBlob)
+	zcashRequest := req.ToJson()
 
 	// find a zcash proxy service
 	zcashService, err := session.GetService(zcashService)
@@ -88,10 +84,14 @@ func main() {
 	}
 
 	// send the zcash transaction
-	mesgRef, err := session.SendUnreliable(zcashService.Name, zcashService.Provider, zcashRequest)
+	wantReply := true
+	msgRef, err := session.SendKaetzchenQuery(zcashService.Name, zcashService.Provider, zcashRequest, wantReply)
 	if err != nil {
 		panic(err)
 	}
-	reply := session.WaitForReply(mesgRef)
-	fmt.Printf("reply: %s", reply)
+
+	reply := session.WaitForReply(msgRef)
+	fmt.Printf("reply: %s\n", reply)
+	fmt.Println("Done. Shutting down.")
+	c.Shutdown()
 }
