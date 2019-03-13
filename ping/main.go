@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	pingService = "loop"
+	pingService = "echo"
 )
 
 func main() {
@@ -73,7 +73,9 @@ func main() {
 	}
 
 	fmt.Println("Awaiting reply...")
-	s.WaitForReply(msgId)
+	reply := s.WaitForReply(msgId)
+	fmt.Printf("reply: %s\n", reply)
+	fmt.Printf("reply: %x\n", reply)
 	fmt.Println("Done. Shutting down.")
 	c.Shutdown()
 }
