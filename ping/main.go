@@ -72,10 +72,9 @@ func main() {
 		panic(err)
 	}
 
-	fmt.Println("Awaiting reply...")
-	reply := s.WaitForReply(msgId)
-	fmt.Printf("reply: %s\n", reply)
-	fmt.Printf("reply: %x\n", reply)
+	fmt.Printf("Awaiting reply for message ID: %x\n", *msgId)
+	mesg := s.WaitForReply(msgId)
+	fmt.Printf("reply: %s\n", mesg)
 	fmt.Println("Done. Shutting down.")
 	c.Shutdown()
 }
