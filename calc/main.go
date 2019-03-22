@@ -25,9 +25,8 @@ import (
 
 func main() {
 
-	lambda := float64(0.00015)
-	shift := uint64(20000)
-	max := uint64(60000)
+	lambda := float64(0.001)
+	max := uint64(90000)
 
 	rng := rand.NewMath()
 
@@ -38,7 +37,6 @@ func main() {
 			wakeMsec = max
 		default:
 		}
-		wakeMsec += shift // Sample, clamp, then shift.
 		wakeInterval := time.Duration(wakeMsec) * time.Millisecond
 		fmt.Printf("duration %s\n", wakeInterval.String())
 	}
