@@ -30,9 +30,15 @@ const (
 
 func main() {
 	var configFile string
+	var service string
 	genOnly := flag.Bool("g", false, "Generate the keys and exit immediately.")
 	flag.StringVar(&configFile, "c", "", "configuration file")
+	flag.StringVar(&service, "s", "", "service name")
 	flag.Parse()
+
+	if service == "" {
+		panic("must specify service name with -s")
+	}
 
 	if *genOnly {
 		cfg, err := config.LoadFile(configFile, *genOnly)
@@ -61,7 +67,7 @@ func main() {
 		panic(err)
 	}
 
-	serviceDesc, err := s.GetService(pingService)
+	serviceDesc, err := s.GetService(service)
 	if err != nil {
 		panic(err)
 	}
