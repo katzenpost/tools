@@ -363,11 +363,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:cbbbe30423bb42e703428d1890e438cdf0bf15e316e77a1bf7ec319bb1e74b56"
+  digest = "1:18b7a5ec988861013910db3c15c65e3da3f42979f15331fc0906da36fd439c9c"
   name = "github.com/katzenpost/server"
   packages = [
     ".",
+    "cborplugin",
     "config",
+    "grpcplugin",
+    "grpcplugin/proto",
     "internal/constants",
     "internal/cryptoworker",
     "internal/debug",
@@ -383,8 +386,6 @@
     "internal/provider/kaetzchen",
     "internal/scheduler",
     "internal/sqldb",
-    "plugin",
-    "plugin/proto",
     "registration",
     "spool",
     "spool/boltspool",
@@ -393,7 +394,7 @@
     "userdb/externuserdb",
   ]
   pruneopts = "UT"
-  revision = "73287b2fa3e3995135dc292d4df5e9f3ccc7035a"
+  revision = "42aefdb704f6a9b0f2bdf61ab3ddcd3d05b58d1d"
 
 [[projects]]
   branch = "fix_logging_bugs"
