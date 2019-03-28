@@ -73,13 +73,16 @@ func main() {
 	}
 	fmt.Println(serviceDesc.Name, serviceDesc.Provider)
 
-	msgId, err := s.SendUnreliableQuery(serviceDesc.Name, serviceDesc.Provider, []byte("hello"))
+	msgId, err := s.SendUnreliableMessage(serviceDesc.Name, serviceDesc.Provider, []byte("hello"))
 	if err != nil {
 		panic(err)
 	}
 
 	fmt.Printf("Awaiting reply for message ID: %x\n", *msgId)
-	mesg := s.WaitForReply(msgId)
+	mesg, err := s.WaitForReply(msgId)
+	if err != nil {
+		panic(err)
+	}
 	fmt.Printf("reply: %s\n", mesg)
 	fmt.Println("Done. Shutting down.")
 	c.Shutdown()
