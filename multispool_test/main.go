@@ -71,8 +71,13 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	spoolID, err := s.CreateSpool(spoolPrivKey, serviceDesc.Name, serviceDesc.Provider)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("REMOTE SPOOL CREATED.")
 
-	err = s.CreateSpool(spoolPrivKey, serviceDesc.Name, serviceDesc.Provider)
+	err = s.AppendToSpool(*spoolID, []byte("hello 1234"), serviceDesc.Name, serviceDesc.Provider)
 	if err != nil {
 		panic(err)
 	}
