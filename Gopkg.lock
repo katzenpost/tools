@@ -244,7 +244,15 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:fc7dd37033b60f0e37c5ab9e0bcd91cfe2bba9b974859cdd2f349c81e29423b7"
+  digest = "1:a75cf600e3a88dd003b1f8e47c3939c3ccb5c1fd7148c903783ec07446598e46"
+  name = "github.com/katzenpost/channels"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "f80e433827aef27278ba9471db046de06bbdf7d3"
+
+[[projects]]
+  branch = "master"
+  digest = "1:a3a471710151d8da2b8adfee0a564cc35beccc496751f31bdb6dd79c54dec0cf"
   name = "github.com/katzenpost/client"
   packages = [
     ".",
@@ -258,7 +266,7 @@
     "utils",
   ]
   pruneopts = "UT"
-  revision = "966f6039ee084ff53ae94d8f4353f4af58b54dc2"
+  revision = "436bb147010fc036f53171129d6945d3c86eae2f"
 
 [[projects]]
   digest = "1:b198e03d62ca628d4ab31a88e737faa11e4699e2b228951f55982f2383459d55"
@@ -452,12 +460,20 @@
   revision = "b93303610bbe1b2cc570daff2de7d77dfac329a0"
 
 [[projects]]
-  digest = "1:4887e9e89c80299aa520d718239809fdd2a47a9aa394909b169959bfbc424ddf"
+  digest = "1:be87bbf905c101f5598a9f30d8f1b6d3cf39b4560dcd4fbc2f86b802a4afcc2d"
+  name = "github.com/status-im/doubleratchet"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "f2aeb83683d753011e9cffda29be0bf6524e1b65"
+  version = "v2.0.0"
+
+[[projects]]
+  digest = "1:d0072748c62defde1ad99dde77f6ffce492a0e5aea9204077e497c7edfb86653"
   name = "github.com/ugorji/go"
   packages = ["codec"]
   pruneopts = "UT"
-  revision = "8fd0f8d918c8f0b52d0af210a812ba882cc31a1e"
-  version = "v1.1.2"
+  revision = "2adff0894ba3bc2eeb9f9aea45fefd49802e1a13"
+  version = "v1.1.4"
 
 [[projects]]
   branch = "master"
@@ -481,7 +497,7 @@
     "ssh/terminal",
   ]
   pruneopts = "UT"
-  revision = "a5d413f7728c81fb97d96a2b722368945f651e78"
+  revision = "88737f569e3a9c7ab309cdc09a07fe7fc87233c3"
 
 [[projects]]
   branch = "master"
@@ -499,11 +515,11 @@
     "trace",
   ]
   pruneopts = "UT"
-  revision = "74de082e2cca95839e88aa0aeee5aadf6ce7710f"
+  revision = "eb5bcb51f2a31c7d5141d810b70815c05d9c9146"
 
 [[projects]]
   branch = "master"
-  digest = "1:cf326ab7d8dab522e1d9cb819fdaa104b301ab4c2f8636e91e9447167febf84b"
+  digest = "1:64a65240cb9eefc6d1adba9a6c58a2c7ea509e45a3e2dfa8dde5f8e8290d675c"
   name = "golang.org/x/sys"
   packages = [
     "cpu",
@@ -511,7 +527,7 @@
     "windows",
   ]
   pruneopts = "UT"
-  revision = "baf5eb976a8cd65845293cd814ea151018552292"
+  revision = "97732733099d6a942a73b889770774366de963ed"
 
 [[projects]]
   digest = "1:4c3c045deaf0ae4d4b14f3abd22bbd322693d1bee1cc59b1e1667fdd3b683e0e"
@@ -554,10 +570,10 @@
   name = "google.golang.org/genproto"
   packages = ["googleapis/rpc/status"]
   pruneopts = "UT"
-  revision = "f467c93bbac2133ff463e1f93d18d8f9f3f04451"
+  revision = "64821d5d210748c883cd2b809589555ae4654203"
 
 [[projects]]
-  digest = "1:0a9f19dcf84d47ea582c0f4db5dbf91f274596a88294198ec15bd0516caac6b2"
+  digest = "1:33cd55021749f5411a96e2d6b96079b5ce5f9bbaca9ffad110c5fab318623490"
   name = "google.golang.org/grpc"
   packages = [
     ".",
@@ -576,6 +592,7 @@
     "health/grpc_health_v1",
     "internal",
     "internal/backoff",
+    "internal/balancerload",
     "internal/binarylog",
     "internal/channelz",
     "internal/envconfig",
@@ -595,8 +612,8 @@
     "tap",
   ]
   pruneopts = "UT"
-  revision = "3507fb8e1a5ad030303c106fef3a47c9fdad16ad"
-  version = "v1.19.1"
+  revision = "236199dd5f8031d698fb64091194aecd1c3895b2"
+  version = "v1.20.0"
 
 [[projects]]
   digest = "1:975a4480c40f2d0b95e1f83d3ec1aa29a2774e80179e08a9a4ba2aab86721b23"
@@ -643,6 +660,7 @@
     "github.com/katzenpost/authority/nonvoting/server/config",
     "github.com/katzenpost/authority/voting/server",
     "github.com/katzenpost/authority/voting/server/config",
+    "github.com/katzenpost/channels",
     "github.com/katzenpost/client",
     "github.com/katzenpost/client/config",
     "github.com/katzenpost/core/crypto/ecdh",
