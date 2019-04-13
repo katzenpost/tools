@@ -66,7 +66,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-
 	serviceDesc, err := s.GetService(spoolService)
 	if err != nil {
 		panic(err)
@@ -76,12 +75,20 @@ func main() {
 		panic(err)
 	}
 	fmt.Println("REMOTE SPOOL CREATED.")
-
-	err = s.AppendToSpool(*spoolID, []byte("hello 1234"), serviceDesc.Name, serviceDesc.Provider)
+	err = s.AppendToSpool(spoolID, []byte("hello 1234\n\n"), serviceDesc.Name, serviceDesc.Provider)
 	if err != nil {
 		panic(err)
 	}
-
+	messageID := uint32(1)
+	response, err := s.ReadFromSpool(spoolID, messageID, spoolPrivKey, serviceDesc.Name, serviceDesc.Provider)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("REPLY from queue message is: %s", response.Message)
+	err = s.PurgeSpool(spoolID, spoolPrivKey, serviceDesc.Name, serviceDesc.Provider)
+	if err != nil {
+		panic(err)
+	}
 	fmt.Println("Done. Shutting down.")
 	c.Shutdown()
 }

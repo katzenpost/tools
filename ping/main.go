@@ -73,13 +73,7 @@ func main() {
 	}
 	fmt.Println(serviceDesc.Name, serviceDesc.Provider)
 
-	msgId, err := s.SendUnreliableMessage(serviceDesc.Name, serviceDesc.Provider, []byte("hello"))
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Printf("Awaiting reply for message ID: %x\n", *msgId)
-	mesg, err := s.WaitForReply(msgId)
+	mesg, err := s.SendUnreliableMessage(serviceDesc.Name, serviceDesc.Provider, []byte("hello"))
 	if err != nil {
 		panic(err)
 	}
