@@ -24,6 +24,7 @@ import (
 	"github.com/katzenpost/channels"
 	"github.com/katzenpost/client"
 	"github.com/katzenpost/client/config"
+	memspoolclient "github.com/katzenpost/memspool/client"
 )
 
 const (
@@ -73,64 +74,50 @@ func main() {
 	}
 
 	// setup comm channels
-	chanAlice, err := channels.NewUnreliableNoiseChannel(serviceDesc.Name, serviceDesc.Provider, aliceSession)
+	aliceSpoolService := memspoolclient.New(aliceSession)
+	aliceSpoolChan, err := channels.NewUnreliableSpoolChannel(serviceDesc.Name, serviceDesc.Provider, aliceSpoolService)
+	if err != nil {
+		panic(err)
+	}
+	bobSpoolService := memspoolclient.New(bobSession)
+	bobSpoolChan, err := channels.NewUnreliableSpoolChannel(serviceDesc.Name, serviceDesc.Provider, bobSpoolService)
 	if err != nil {
 		panic(err)
 	}
 
-	chanBob, err := channels.NewUnreliableNoiseChannel(serviceDesc.Name, serviceDesc.Provider, bobSession)
-	if err != nil {
-		panic(err)
-	}
-
-	chanAliceDescriptor := chanAlice.DescribeWriter()
-	chanBobDescriptor := chanBob.DescribeWriter()
-	err = chanBob.WithRemoteWriterDescriptor(chanAliceDescriptor)
-	if err != nil {
-		panic(err)
-	}
-	err = chanAlice.WithRemoteWriterDescriptor(chanBobDescriptor)
-	if err != nil {
-		panic(err)
-	}
-
-	// test the comm channels
-	msg1 := []byte(`hello`)
-	err = chanAlice.Write(msg1)
-	if err != nil {
-		panic(err)
-	}
-	msg1Read, err := chanBob.Read()
-	if err != nil {
-		panic(err)
-	}
-	if !bytes.Equal(msg1, msg1Read) {
-		panic("wtf messages not equal")
-	}
-
-	msg2 := []byte(`goodbye`)
-	err = chanBob.Write(msg2)
-	if err != nil {
-		panic(err)
-	}
-	msg2Read, err := chanAlice.Read()
-	if err != nil {
-		panic(err)
-	}
-	if !bytes.Equal(msg2, msg2Read) {
-		panic("wtf messages not equal")
-	}
+	aliceWriterChanDesc := aliceSpoolChan.GetSpoolWriter()
+	bobWriterChanDesc := bobSpoolChan.GetSpoolWriter()
+	bobSpoolChan.WithRemoteWriter(aliceWriterChanDesc)
+	aliceSpoolChan.WithRemoteWriter(bobWriterChanDesc)
 
 	// signal double ratchets
-	ratchetChanAlice, err := channels.NewUnreliableDoubleRatchetChannel(chanAlice)
+	ratchetChanAlice, err := channels.NewUnreliableDoubleRatchetChannel(aliceSpoolChan)
 	if err != nil {
 		panic(err)
 	}
-	descAlice := ratchetChanAlice.GetDescriptor()
-	ratchetChanBob, err := channels.NewUnreliableDoubleRatchetChannelWithRemoteDescriptor(chanBob, descAlice)
+	descAlice, err := ratchetChanAlice.KeyExchange()
 	if err != nil {
 		panic(err)
 	}
+
+	ratchetChanBob, err := channels.NewUnreliableDoubleRatchetChannel(bobSpoolChan)
+	if err != nil {
+		panic(err)
+	}
+	descBob, err := ratchetChanBob.KeyExchange()
+	if err != nil {
+		panic(err)
+	}
+
+	err = ratchetChanBob.ProcessKeyExchange(descAlice)
+	if err != nil {
+		panic(err)
+	}
+	err = ratchetChanAlice.ProcessKeyExchange(descBob)
+	if err != nil {
+		panic(err)
+	}
+
 	msg3 := []byte("write something cool here in place of this message")
 	err = ratchetChanAlice.Write(msg3)
 	if err != nil {
