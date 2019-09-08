@@ -25,7 +25,7 @@ import (
 
 func main() {
 
-	lambda := float64(0.001)
+	lambda := float64(0.0001234)
 	max := uint64(90000)
 
 	rng := rand.NewMath()
