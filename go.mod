@@ -15,7 +15,7 @@ require (
 	github.com/hpcloud/tail v1.0.0
 	github.com/katzenpost/authority v0.0.9-0.20190907184439-988189a151b2
 	github.com/katzenpost/channels v0.0.1
-	github.com/katzenpost/client v0.0.3-0.20190908130035-a6e41f0629f6
+	github.com/katzenpost/client v0.0.3-0.20190910134727-cf452c23d04e
 	github.com/katzenpost/core v0.0.8-0.20190907182339-71fec89c259d
 	github.com/katzenpost/doubleratchet v0.0.0 // indirect
 	github.com/katzenpost/kimchi v0.0.0-20190909160051-6117459ceb2f // indirect

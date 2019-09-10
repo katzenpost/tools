@@ -18,7 +18,6 @@ package main
 
 import (
 	"context"
-	"encoding/hex"
 	"flag"
 	"fmt"
 	mrand "math/rand"
@@ -50,7 +49,7 @@ func randUser() string {
 	return fmt.Sprintf("%x", user[:])
 }
 
-func register(cfg *config.Config) {
+func register(cfg *config.Config) (*config.Config, *ecdh.PrivateKey) {
 	// Retrieve a copy of the PKI consensus document.
 	logFilePath := ""
 	backendLog, err := log.New(logFilePath, "DEBUG", false)
@@ -84,12 +83,16 @@ func register(cfg *config.Config) {
 
 	// Register with that Provider.
 	fmt.Println("registering client with mixnet Provider")
-	user := randUser()
+	linkKey, err := ecdh.NewKeypair(rand.Reader)
+	if err != nil {
+		panic(err)
+	}
 	account := &clientConfig.Account{
-		User:           user,
+		User:           fmt.Sprintf("%x", linkKey.PublicKey().Bytes()),
 		Provider:       registrationProvider.Name,
 		ProviderKeyPin: registrationProvider.IdentityKey,
 	}
+
 	u, err := url.Parse(registrationProvider.RegistrationHTTPAddresses[0])
 	if err != nil {
 		panic(err)
@@ -105,56 +108,29 @@ func register(cfg *config.Config) {
 	}
 	cfg.Account = account
 	cfg.Registration = registration
-	linkKey, err := ecdh.NewKeypair(rand.Reader)
-	if err != nil {
-		panic(err)
-	}
 	err = client.RegisterClient(cfg, linkKey.PublicKey())
 	if err != nil {
 		panic(err)
 	}
+	return cfg, linkKey
 }
 
 func main() {
 	var configFile string
 	var service string
-	var linkPrivHex string
-	genOnly := flag.Bool("g", false, "Generate the keys and exit immediately.")
 	flag.StringVar(&configFile, "c", "", "configuration file")
 	flag.StringVar(&service, "s", "", "service name")
-	flag.StringVar(&linkPrivHex, "s", "", "private ECDH key hex string")
 	flag.Parse()
 
 	if service == "" {
 		panic("must specify service name with -s")
 	}
 
-	if *genOnly {
-		linkKey, err := ecdh.NewKeypair(rand.Reader)
-		if err != nil {
-			panic(err)
-		}
-
-		cfg, err := config.LoadFile(configFile)
-		if err != nil {
-			panic(err)
-		}
-		register(cfg)
-		fmt.Printf("link priv hex: %x", linkKey.Bytes())
-		return
-	}
-
-	rawK, err := hex.DecodeString(linkPrivHex)
-	if err != nil {
-		panic(err)
-	}
-	linkKey := new(ecdh.PrivateKey)
-	linkKey.FromBytes(rawK)
-
 	cfg, err := config.LoadFile(configFile)
 	if err != nil {
 		panic(err)
 	}
+	cfg, linkKey := register(cfg)
 
 	// create a client and connect to the mixnet Provider
 	c, err := client.New(cfg)
@@ -170,7 +146,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(serviceDesc.Name, serviceDesc.Provider)
+	fmt.Printf("sending ping to %s@%s\n", serviceDesc.Name, serviceDesc.Provider)
 
 	mesg, err := s.SendUnreliableMessage(serviceDesc.Name, serviceDesc.Provider, []byte("hello"))
 	if err != nil {
