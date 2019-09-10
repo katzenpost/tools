@@ -17,23 +17,112 @@
 package main
 
 import (
+	"context"
+	"encoding/hex"
 	"flag"
 	"fmt"
+	mrand "math/rand"
+	"net/url"
+	"strings"
+	"time"
 
 	"github.com/katzenpost/client"
 	"github.com/katzenpost/client/config"
+	clientConfig "github.com/katzenpost/client/config"
+	"github.com/katzenpost/core/crypto/ecdh"
+	"github.com/katzenpost/core/crypto/rand"
+	"github.com/katzenpost/core/epochtime"
+	"github.com/katzenpost/core/log"
+	"github.com/katzenpost/core/pki"
+	registration "github.com/katzenpost/registration_client"
 )
 
 const (
-	pingService = "echo"
+	initialPKIConsensusTimeout = 45 * time.Second
 )
+
+func randUser() string {
+	user := [32]byte{}
+	_, err := rand.Reader.Read(user[:])
+	if err != nil {
+		panic(err)
+	}
+	return fmt.Sprintf("%x", user[:])
+}
+
+func register(cfg *config.Config) {
+	// Retrieve a copy of the PKI consensus document.
+	logFilePath := ""
+	backendLog, err := log.New(logFilePath, "DEBUG", false)
+	if err != nil {
+		panic(err)
+	}
+	proxyCfg := cfg.UpstreamProxyConfig()
+	pkiClient, err := cfg.NewPKIClient(backendLog, proxyCfg)
+	if err != nil {
+		panic(err)
+	}
+	currentEpoch, _, _ := epochtime.FromUnix(time.Now().Unix())
+	ctx, cancel := context.WithTimeout(context.Background(), initialPKIConsensusTimeout)
+	defer cancel()
+	doc, _, err := pkiClient.Get(ctx, currentEpoch)
+	if err != nil {
+		panic(err)
+	}
+
+	// Pick a registration Provider.
+	registerProviders := []*pki.MixDescriptor{}
+	for _, provider := range doc.Providers {
+		if provider.RegistrationHTTPAddresses != nil {
+			registerProviders = append(registerProviders, provider)
+		}
+	}
+	if len(registerProviders) == 0 {
+		panic("zero registration Providers found in the consensus")
+	}
+	registrationProvider := registerProviders[mrand.Intn(len(registerProviders))]
+
+	// Register with that Provider.
+	fmt.Println("registering client with mixnet Provider")
+	user := randUser()
+	account := &clientConfig.Account{
+		User:           user,
+		Provider:       registrationProvider.Name,
+		ProviderKeyPin: registrationProvider.IdentityKey,
+	}
+	u, err := url.Parse(registrationProvider.RegistrationHTTPAddresses[0])
+	if err != nil {
+		panic(err)
+	}
+	registration := &clientConfig.Registration{
+		Address: u.Host,
+		Options: &registration.Options{
+			Scheme:       u.Scheme,
+			UseSocks:     strings.HasPrefix(cfg.UpstreamProxy.Type, "socks"),
+			SocksNetwork: cfg.UpstreamProxy.Network,
+			SocksAddress: cfg.UpstreamProxy.Address,
+		},
+	}
+	cfg.Account = account
+	cfg.Registration = registration
+	linkKey, err := ecdh.NewKeypair(rand.Reader)
+	if err != nil {
+		panic(err)
+	}
+	err = client.RegisterClient(cfg, linkKey.PublicKey())
+	if err != nil {
+		panic(err)
+	}
+}
 
 func main() {
 	var configFile string
 	var service string
+	var linkPrivHex string
 	genOnly := flag.Bool("g", false, "Generate the keys and exit immediately.")
 	flag.StringVar(&configFile, "c", "", "configuration file")
 	flag.StringVar(&service, "s", "", "service name")
+	flag.StringVar(&linkPrivHex, "s", "", "private ECDH key hex string")
 	flag.Parse()
 
 	if service == "" {
@@ -41,18 +130,28 @@ func main() {
 	}
 
 	if *genOnly {
-		cfg, err := config.LoadFile(configFile, *genOnly)
+		linkKey, err := ecdh.NewKeypair(rand.Reader)
 		if err != nil {
 			panic(err)
 		}
-		_, err = client.New(cfg)
+
+		cfg, err := config.LoadFile(configFile)
 		if err != nil {
 			panic(err)
 		}
+		register(cfg)
+		fmt.Printf("link priv hex: %x", linkKey.Bytes())
 		return
 	}
 
-	cfg, err := config.LoadFile(configFile, *genOnly)
+	rawK, err := hex.DecodeString(linkPrivHex)
+	if err != nil {
+		panic(err)
+	}
+	linkKey := new(ecdh.PrivateKey)
+	linkKey.FromBytes(rawK)
+
+	cfg, err := config.LoadFile(configFile)
 	if err != nil {
 		panic(err)
 	}
@@ -62,7 +161,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	s, err := c.NewSession()
+	s, err := c.NewSession(linkKey)
 	if err != nil {
 		panic(err)
 	}
