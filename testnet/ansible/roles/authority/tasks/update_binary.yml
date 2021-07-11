@@ -1,5 +1,5 @@
 ---
 - name: update katzen-authority binary
-  copy: src="{{ binaryPath }}" dest=/usr/bin/katzenpost-authority owner=root group=root mode=0755
+  copy: src="{{ binaryPath }}" dest=/usr/local/bin/katzenpost-authority owner=root group=root mode=0755
   notify:
     - restart katzen-authority
