@@ -1,15 +1,5 @@
+This repository is no longer used.
 
-==============
- mixnet tools
-==============
+Some parts of it were split out into separate others repos, and later were combined in the katzenpost monorepo merge:
 
-
-
-supported by
-============
-
-.. image:: https://katzenpost.mixnetworks.org/_static/images/eu-flag-tiny.jpg
-
-This project has received funding from the European Union’s Horizon 2020
-research and innovation programme under the Grant Agreement No 653497, Privacy
-and Accountability in Networks via Optimized Randomized Mix-nets (Panoramix).
+https://github.com/katzenpost/katzenpost/issues/1
