@@ -1,3 +1,4 @@
+// Deprecated: use github.com/katzenpost/katzenpost instead.
 module github.com/katzenpost/tools
 
 go 1.13
@@ -30,4 +31,9 @@ require (
 	github.com/siebenmann/smtpd v0.0.0-20170816215504-b93303610bbe // indirect
 	github.com/ugorji/go/codec v1.1.7
 	golang.org/x/crypto v0.0.0-20190907121410-71b5226ff739
+)
+
+retract (
+v0.0.0
+v0.0.1
 )
